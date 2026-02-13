@@ -1,0 +1,82 @@
+# ─── Deploy to Prod ───────────────────────────────────────────────
+# Triggered on push to the `main` branch (prod).
+# Requires manual approval via the GitHub environment protection rule.
+
+name: Deploy — Prod
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.11"
+  TERRAFORM_VERSION: "1.14.5"
+  AWS_REGION: eu-west-1
+  PROJECT: domain-project
+  ENVIRONMENT: prod
+
+jobs:
+  deploy:
+    name: Deploy to Prod
+    runs-on: ubuntu-latest
+    environment: prod          # ← GitHub environment with required reviewers
+    steps:
+      # ── Checkout & Setup ─────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      # ── Build ────────────────────────────────────────────────────
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build --wheel --outdir dist/
+
+      # ── Upload Artifacts to S3 ───────────────────────────────────
+      - name: Upload job scripts to S3
+        run: |
+          aws s3 sync src/domain_project/jobs/ \
+            s3://${{ env.PROJECT }}-artifacts-${{ env.ENVIRONMENT }}/jobs/ \
+            --delete --exact-timestamps
+
+      - name: Upload wheel to S3
+        run: |
+          WHEEL=$(ls dist/*.whl | head -1)
+          aws s3 cp "$WHEEL" \
+            s3://${{ env.PROJECT }}-artifacts-${{ env.ENVIRONMENT }}/wheels/domain_project-latest-py3-none-any.whl
+
+      # ── Terraform ────────────────────────────────────────────────
+      - name: Terraform Init
+        working-directory: infrastructure/environments/${{ env.ENVIRONMENT }}
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: infrastructure/environments/${{ env.ENVIRONMENT }}
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Terraform Apply
+        working-directory: infrastructure/environments/${{ env.ENVIRONMENT }}
+        run: terraform apply -auto-approve tfplan
