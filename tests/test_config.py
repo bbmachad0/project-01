@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from domain_project.core.config import get_config, _ENV_PREFIX
+from core.config.settings import get_config, _ENV_PREFIX
 
 
 class TestGetConfig:
@@ -21,7 +21,7 @@ class TestGetConfig:
         cfg = get_config()
 
         assert cfg["env"] == "local"
-        assert cfg["s3_raw_bucket"] == "domain-project-raw"
+        assert cfg["s3_raw_bucket"] == "nl-raw"
         assert cfg["iceberg_warehouse"].startswith("s3://")
 
     def test_env_variable_overrides_default(self, monkeypatch):

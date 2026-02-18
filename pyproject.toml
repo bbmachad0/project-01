@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "domain-project"
+name = "core"
 version = "1.0.0"
-description = "Enterprise AWS Data Mesh domain — shared core library and Glue job toolkit."
+description = "Data Domain — shared core library for Glue Spark jobs."
 readme = "README.md"
 license = {text = "Proprietary"}
 requires-python = ">=3.11"
@@ -22,6 +22,7 @@ classifiers = [
 
 dependencies = [
     "pyspark>=3.5,<3.6",
+    "boto3>=1.35",
 ]
 
 [project.optional-dependencies]
@@ -35,7 +36,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["domain_project.core", "domain_project.core.*"]
+include = ["core", "core.*"]
 # Jobs are NOT packaged — they remain standalone scripts uploaded to S3.
 
 [tool.setuptools.package-dir]
@@ -51,7 +52,7 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "RUF"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["domain_project"]
+known-first-party = ["core"]
 
 # ─── Pytest ──────────────────────────────────────────────────────
 [tool.pytest.ini_options]

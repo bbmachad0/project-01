@@ -2,7 +2,7 @@
 
 import logging
 
-from domain_project.core.logging import get_logger
+from core.logging.logger import get_logger
 
 
 class TestGetLogger:

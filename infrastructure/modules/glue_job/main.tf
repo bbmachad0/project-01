@@ -5,7 +5,10 @@
 #   - Spark (Glue 5.1) and Python Shell job types
 #   - Configurable DPU / worker allocation
 #   - Extra Python libraries via .whl on S3
+#   - Iceberg with Glue Catalog (auto-configured via --datalake-formats)
 #   - Job bookmarks, metrics, and observability defaults
+
+# ─── Variables ───────────────────────────────────────────────────
 
 variable "job_name" {
   description = "Human-readable Glue job name."
@@ -32,6 +35,16 @@ variable "extra_py_files" {
   description = "Comma-separated S3 URIs of additional Python files or wheels."
   type        = string
   default     = ""
+}
+
+variable "temp_dir" {
+  description = "S3 URI for Glue temporary directory (e.g. s3://bucket/glue-temp/)."
+  type        = string
+}
+
+variable "iceberg_warehouse" {
+  description = "S3 URI for the Iceberg warehouse location (e.g. s3://bucket/iceberg/)."
+  type        = string
 }
 
 variable "glue_version" {
@@ -65,7 +78,7 @@ variable "timeout_minutes" {
 }
 
 variable "default_arguments" {
-  description = "Map of default arguments passed to the job."
+  description = "Map of default arguments passed to the job (merged with base arguments)."
   type        = map(string)
   default     = {}
 }
@@ -97,16 +110,23 @@ variable "tags" {
 # ─── Locals ──────────────────────────────────────────────────────
 
 locals {
+  iceberg_conf = join(" --conf ", [
+    "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+    "spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog",
+    "spark.sql.catalog.glue_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog",
+    "spark.sql.catalog.glue_catalog.warehouse=${var.iceberg_warehouse}",
+  ])
+
   base_arguments = {
     "--enable-continuous-cloudwatch-log" = "true"
     "--enable-metrics"                   = var.enable_metrics ? "true" : "false"
     "--enable-spark-ui"                  = var.enable_metrics ? "true" : "false"
     "--enable-glue-datacatalog"          = "true"
     "--job-bookmark-option"              = var.bookmark_enabled ? "job-bookmark-enable" : "job-bookmark-disable"
-    "--TempDir"                          = "s3://${var.tags["project"]}-artifacts-${var.tags["env"]}/glue-temp/"
+    "--TempDir"                          = var.temp_dir
     "--extra-py-files"                   = var.extra_py_files
     "--datalake-formats"                 = "iceberg"
-    "--conf"                             = "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.glue_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog --conf spark.sql.catalog.glue_catalog.warehouse=s3://${var.tags["project"]}-warehouse-${var.tags["env"]}/iceberg/"
+    "--conf"                             = local.iceberg_conf
   }
 
   merged_arguments = merge(local.base_arguments, var.default_arguments)

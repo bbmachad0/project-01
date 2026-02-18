@@ -1,11 +1,13 @@
-# ─── domain-project Makefile ─────────────────────────────────────
-# Common development commands for local development, testing,
-# building, and infrastructure management.
+# ─── Data Mesh Domain Makefile ────────────────────────────────────
+# All config read from domain.json — edit that file, not this one.
 
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-PROJECT      := domain-project
+# Read from domain.json (single source of truth)
+DOMAIN_ABBR  := $(shell jq -r .domain_abbr domain.json)
+AWS_REGION   := $(shell jq -r .aws_region domain.json)
+
 PYTHON       := python3
 PIP          := pip
 PYTEST       := pytest
@@ -13,9 +15,10 @@ DOCKER       := docker
 TF           := terraform
 ENVIRONMENT  ?= dev
 
-DOCKER_IMAGE := $(PROJECT)-local
+DOCKER_IMAGE := $(DOMAIN_ABBR)-local
 DOCKER_TAG   := latest
 WHEEL_DIR    := dist
+WHEEL_NAME   := core-latest-py3-none-any.whl
 
 # ─── Help ────────────────────────────────────────────────────────
 
@@ -28,11 +31,11 @@ help: ## Show available commands
 
 .PHONY: bootstrap
 bootstrap: ## Run full local environment setup (idempotent)
-	@./scripts/bootstrap.sh
+	@./setup/bootstrap.sh
 
 .PHONY: bootstrap-docker
 bootstrap-docker: ## Bootstrap using Docker instead of a local venv
-	@./scripts/bootstrap.sh --docker
+	@./setup/bootstrap.sh --docker
 
 # ─── Local Development ───────────────────────────────────────────
 
@@ -42,7 +45,7 @@ install: ## Install project in editable mode with dev dependencies
 
 .PHONY: run-local
 run-local: ## Run a job locally (usage: make run-local JOB=sales/job_daily_sales.py)
-	ENV=local $(PYTHON) src/domain_project/jobs/$(JOB)
+	ENV=local $(PYTHON) src/jobs/$(JOB)
 
 .PHONY: docker-build
 docker-build: ## Build the local Spark development Docker image
@@ -55,16 +58,16 @@ docker-run: ## Run a job inside the local Docker container
 		-e AWS_ACCESS_KEY_ID \
 		-e AWS_SECRET_ACCESS_KEY \
 		-e AWS_SESSION_TOKEN \
-		-e AWS_REGION=eu-west-1 \
+		-e AWS_REGION=$(AWS_REGION) \
 		-v $(PWD)/src:/app/src \
 		$(DOCKER_IMAGE):$(DOCKER_TAG) \
-		$(PYTHON) src/domain_project/jobs/$(JOB)
+		$(PYTHON) src/jobs/$(JOB)
 
 # ─── Testing ─────────────────────────────────────────────────────
 
 .PHONY: test
 test: ## Run all unit tests with coverage
-	$(PYTEST) tests/ -v --tb=short --cov=domain_project --cov-report=term-missing
+	$(PYTEST) tests/ -v --tb=short --cov=core --cov-report=term-missing
 
 .PHONY: lint
 lint: ## Run linters (ruff)
@@ -78,7 +81,7 @@ format: ## Auto-format code with ruff
 
 .PHONY: typecheck
 typecheck: ## Run mypy type checking
-	mypy src/domain_project/core/
+	mypy src/core/
 
 # ─── Build ───────────────────────────────────────────────────────
 
@@ -97,19 +100,19 @@ clean: ## Remove build artifacts and caches
 
 .PHONY: terraform-init
 terraform-init: ## Initialize Terraform for an environment (ENVIRONMENT=dev|int|prod)
-	cd infrastructure/environments/$(ENVIRONMENT) && $(TF) init
+	cd infrastructure/environments/$(ENVIRONMENT) && $(TF) init -backend-config=backend.conf
 
 .PHONY: terraform-plan-dev
 terraform-plan-dev: ## Run Terraform plan for Dev
-	cd infrastructure/environments/dev && $(TF) init && $(TF) plan
+	cd infrastructure/environments/dev && $(TF) init -backend-config=backend.conf && $(TF) plan
 
 .PHONY: terraform-plan-int
 terraform-plan-int: ## Run Terraform plan for Int
-	cd infrastructure/environments/int && $(TF) init && $(TF) plan
+	cd infrastructure/environments/int && $(TF) init -backend-config=backend.conf && $(TF) plan
 
 .PHONY: terraform-plan-prod
 terraform-plan-prod: ## Run Terraform plan for Prod
-	cd infrastructure/environments/prod && $(TF) init && $(TF) plan
+	cd infrastructure/environments/prod && $(TF) init -backend-config=backend.conf && $(TF) plan
 
 .PHONY: terraform-apply
 terraform-apply: ## Apply Terraform for an environment (ENVIRONMENT=dev|int|prod)
@@ -122,16 +125,20 @@ terraform-validate: ## Validate Terraform for all environments
 		cd infrastructure/environments/$$env && $(TF) init -backend=false && $(TF) validate && cd ../../..; \
 	done
 
+.PHONY: init-terraform
+init-terraform: ## Regenerate all backend.conf files from domain.json
+	@./setup/init-terraform.sh
+
 # ─── Upload Artifacts ────────────────────────────────────────────
 
 .PHONY: upload-jobs
 upload-jobs: ## Sync job scripts to S3 artifacts bucket
-	aws s3 sync src/domain_project/jobs/ \
-		s3://$(PROJECT)-artifacts-$(ENVIRONMENT)/jobs/ \
+	aws s3 sync src/jobs/ \
+		s3://$(DOMAIN_ABBR)-artifacts-$(ENVIRONMENT)/jobs/ \
 		--delete --exact-timestamps
 
 .PHONY: upload-wheel
 upload-wheel: build ## Build and upload wheel to S3
 	WHEEL=$$(ls $(WHEEL_DIR)/*.whl | head -1) && \
 	aws s3 cp "$$WHEEL" \
-		s3://$(PROJECT)-artifacts-$(ENVIRONMENT)/wheels/domain_project-latest-py3-none-any.whl
+		s3://$(DOMAIN_ABBR)-artifacts-$(ENVIRONMENT)/wheels/$(WHEEL_NAME)

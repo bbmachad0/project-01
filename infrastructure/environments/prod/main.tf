@@ -1,5 +1,10 @@
 # ─── Prod Environment — Root Module ──────────────────────────────
 
+locals {
+  domain = jsondecode(file("${path.module}/../../../domain.json"))
+  env    = "prod"
+}
+
 terraform {
   required_version = ">= 1.14"
 
@@ -11,61 +16,59 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "domain-project-tfstate-prod"
-    key            = "infrastructure/terraform.tfstate"
-    region         = "eu-west-1"
-    dynamodb_table = "domain-project-tflock-prod"
-    encrypt        = true
+    key     = "infrastructure/terraform.tfstate"
+    encrypt = true
   }
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = local.domain.aws_region
 
   default_tags {
     tags = {
-      project    = var.project
-      env        = "prod"
-      managed_by = "terraform"
+      domain      = local.domain.domain_name
+      domain_abbr = local.domain.domain_abbr
+      env         = local.env
+      managed_by  = "terraform"
     }
   }
 }
 
-# ─── Variables ───────────────────────────────────────────────────
+# ─── Foundation Infrastructure ───────────────────────────────────
 
-variable "project" {
-  type    = string
-  default = "domain-project"
+module "foundation" {
+  source      = "../../foundation"
+  domain_name = local.domain.domain_name
+  domain_abbr = local.domain.domain_abbr
+  env         = local.env
+  aws_region  = local.domain.aws_region
+  vpc_cidr    = "10.30.0.0/16"
 }
 
-variable "aws_region" {
-  type    = string
-  default = "eu-west-1"
-}
+# ─── Projects ────────────────────────────────────────────────────
 
-# ─── Central Infrastructure ─────────────────────────────────────
+module "projects" {
+  source      = "../../projects"
+  domain_abbr = local.domain.domain_abbr
+  env         = local.env
 
-module "central" {
-  source     = "../../central"
-  project    = var.project
-  env        = "prod"
-  aws_region = var.aws_region
-  vpc_cidr   = "10.30.0.0/16"
-}
+  account_id               = module.foundation.account_id
+  artifacts_bucket         = module.foundation.s3_artifacts_bucket_id
+  raw_bucket               = module.foundation.s3_raw_bucket_id
+  curated_bucket           = module.foundation.s3_curated_bucket_id
+  warehouse_bucket         = module.foundation.s3_warehouse_bucket_id
+  glue_execution_role_arn  = module.foundation.glue_execution_role_arn
+  table_optimizer_role_arn = module.foundation.table_optimizer_role_arn
+  sfn_execution_role_arn   = module.foundation.sfn_execution_role_arn
 
-# ─── Jobs ────────────────────────────────────────────────────────
-
-module "jobs" {
-  source                  = "../../jobs"
-  project                 = var.project
-  env                     = "prod"
-  artifacts_bucket        = module.central.s3_artifacts_bucket_id
-  glue_execution_role_arn = module.central.glue_execution_role_arn
-  sfn_execution_role_arn  = module.central.sfn_execution_role_arn
+  db_raw_name     = module.foundation.db_raw_name
+  db_refined_name = module.foundation.db_refined_name
+  db_curated_name = module.foundation.db_curated_name
 
   common_tags = {
-    project    = var.project
-    env        = "prod"
-    managed_by = "terraform"
+    domain      = local.domain.domain_name
+    domain_abbr = local.domain.domain_abbr
+    env         = local.env
+    managed_by  = "terraform"
   }
 }

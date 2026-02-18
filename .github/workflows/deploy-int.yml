@@ -1,11 +1,17 @@
 # ─── Deploy to Int ────────────────────────────────────────────────
-# Triggered on push to the `int` branch after CI passes.
+# Triggered on push to the `int` branch.
+# Uses path filters to skip unnecessary steps.
+# All config read from domain.json — no hardcoded project names.
 
 name: Deploy — Int
 
 on:
   push:
     branches: [int]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
 
 permissions:
   contents: read
@@ -18,17 +24,53 @@ concurrency:
 env:
   PYTHON_VERSION: "3.11"
   TERRAFORM_VERSION: "1.14.5"
-  AWS_REGION: eu-west-1
-  PROJECT: domain-project
-  ENVIRONMENT: int
 
 jobs:
+  # ── Detect what changed ──────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      jobs: ${{ steps.filter.outputs.jobs }}
+      infra: ${{ steps.filter.outputs.infra }}
+      domain_abbr: ${{ steps.domain.outputs.domain_abbr }}
+      aws_region: ${{ steps.domain.outputs.aws_region }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read domain.json
+        id: domain
+        run: |
+          echo "domain_abbr=$(jq -r .domain_abbr domain.json)" >> "$GITHUB_OUTPUT"
+          echo "aws_region=$(jq -r .aws_region domain.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Path filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            core:
+              - 'src/core/**'
+              - 'pyproject.toml'
+            jobs:
+              - 'src/jobs/**'
+            infra:
+              - 'infrastructure/**'
+              - 'domain.json'
+
+  # ── Deploy ───────────────────────────────────────────────────────
   deploy:
     name: Deploy to Int
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     environment: int
+    env:
+      ABBR: ${{ needs.changes.outputs.domain_abbr }}
+      ENV: int
     steps:
-      # ── Checkout & Setup ─────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -36,46 +78,54 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_INT }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ needs.changes.outputs.aws_region }}
 
+      # ── Build & Upload Wheel (only when core changed) ────────────
       - name: Setup Python
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      # ── Build ────────────────────────────────────────────────────
       - name: Build wheel
+        if: needs.changes.outputs.core == 'true'
         run: |
           pip install build
           python -m build --wheel --outdir dist/
 
-      # ── Upload Artifacts to S3 ───────────────────────────────────
-      - name: Upload job scripts to S3
-        run: |
-          aws s3 sync src/domain_project/jobs/ \
-            s3://${{ env.PROJECT }}-artifacts-${{ env.ENVIRONMENT }}/jobs/ \
-            --delete --exact-timestamps
-
       - name: Upload wheel to S3
+        if: needs.changes.outputs.core == 'true'
         run: |
           WHEEL=$(ls dist/*.whl | head -1)
           aws s3 cp "$WHEEL" \
-            s3://${{ env.PROJECT }}-artifacts-${{ env.ENVIRONMENT }}/wheels/domain_project-latest-py3-none-any.whl
+            "s3://${ABBR}-artifacts-${ENV}/wheels/core-latest-py3-none-any.whl"
 
-      # ── Terraform ────────────────────────────────────────────────
+      # ── Upload Job Scripts (only when jobs changed) ──────────────
+      - name: Upload job scripts to S3
+        if: needs.changes.outputs.jobs == 'true'
+        run: |
+          aws s3 sync src/jobs/ \
+            "s3://${ABBR}-artifacts-${ENV}/jobs/" \
+            --delete --exact-timestamps
+
+      # ── Terraform (only when infra changed) ──────────────────────
+      - name: Setup Terraform
+        if: needs.changes.outputs.infra == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
       - name: Terraform Init
-        working-directory: infrastructure/environments/${{ env.ENVIRONMENT }}
-        run: terraform init
+        if: needs.changes.outputs.infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
+        run: terraform init -backend-config=backend.conf
 
       - name: Terraform Plan
-        working-directory: infrastructure/environments/${{ env.ENVIRONMENT }}
+        if: needs.changes.outputs.infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
         run: terraform plan -out=tfplan -input=false
 
       - name: Terraform Apply
-        working-directory: infrastructure/environments/${{ env.ENVIRONMENT }}
+        if: needs.changes.outputs.infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
         run: terraform apply -auto-approve tfplan

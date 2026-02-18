@@ -8,6 +8,7 @@ FROM python:3.11-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openjdk-17-jre-headless \
         curl \
+        jq \
         procps \
     && rm -rf /var/lib/apt/lists/*
 
@@ -15,7 +16,7 @@ ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # ── Spark installation ────────────────────────────────────────────
-ENV SPARK_VERSION=3.5.4
+ENV SPARK_VERSION=3.5.6
 ENV HADOOP_VERSION=3
 ENV SPARK_HOME=/opt/spark
 ENV PATH="${SPARK_HOME}/bin:${PATH}"
@@ -31,7 +32,7 @@ RUN curl -fsSL \
 # ── Python dependencies ──────────────────────────────────────────
 WORKDIR /app
 
-COPY pyproject.toml ./
+COPY pyproject.toml domain.json ./
 # Install in editable-friendly layout (build deps only first)
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir pyspark==${SPARK_VERSION} ".[dev]" \

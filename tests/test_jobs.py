@@ -16,9 +16,9 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from domain_project.jobs.sales.job_daily_sales import transform_daily_sales
-from domain_project.jobs.customers.job_customer_delta import deduplicate_events
-from domain_project.jobs.legacy_refactor.job_step01 import align_schema
+from jobs.sales.job_daily_sales import transform_daily_sales
+from jobs.customers.job_customer_delta import deduplicate_events
+from jobs.legacy_refactor.job_step01 import align_schema
 
 
 @pytest.fixture(scope="session")
