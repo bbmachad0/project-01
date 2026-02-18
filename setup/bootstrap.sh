@@ -71,25 +71,21 @@ install_java() {
 # ─── Python ─────────────────────────────────────────────────────
 
 install_python() {
-    local minor="${PYTHON_VERSION#3.}"
     if command -v "python${PYTHON_VERSION}" &>/dev/null; then
         ok "Python ${PYTHON_VERSION} already installed"
-    else
-        info "Installing Python ${PYTHON_VERSION} via deadsnakes PPA ..."
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq \
-            "python${PYTHON_VERSION}" \
-            "python${PYTHON_VERSION}-venv" \
-            "python${PYTHON_VERSION}-dev"
-        ok "Python ${PYTHON_VERSION} installed"
+        return 0
     fi
-
-    # Ensure python3 points to the correct version
-    if ! python3 --version 2>/dev/null | grep -q "3\.${minor}"; then
-        sudo update-alternatives --install /usr/bin/python3 python3 \
-            "$(command -v "python${PYTHON_VERSION}")" 1 2>/dev/null || true
-    fi
+    info "Installing Python ${PYTHON_VERSION} via deadsnakes PPA ..."
+    sudo add-apt-repository -y ppa:deadsnakes/ppa
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq \
+        "python${PYTHON_VERSION}" \
+        "python${PYTHON_VERSION}-venv" \
+        "python${PYTHON_VERSION}-dev"
+    ok "Python ${PYTHON_VERSION} installed"
+    # NOTE: We do NOT override the system python3 symlink.
+    # Ubuntu system tools (apt_pkg, etc.) depend on the default
+    # Python version. We use python3.11 explicitly everywhere.
 }
 
 # ─── Scala ───────────────────────────────────────────────────────
@@ -154,7 +150,7 @@ install_terraform() {
     if command -v terraform &>/dev/null; then
         local tfver
         tfver=$(terraform version -json 2>/dev/null \
-            | python3 -c "import sys,json;print(json.load(sys.stdin)['terraform_version'])" 2>/dev/null \
+            | "python${PYTHON_VERSION}" -c "import sys,json;print(json.load(sys.stdin)['terraform_version'])" 2>/dev/null \
             || terraform version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
         ok "Terraform ${tfver} already installed"
         return 0
@@ -218,8 +214,9 @@ setup_venv() {
         rm -rf "${VENV_DIR}"
     fi
     if [[ ! -d "${VENV_DIR}" ]]; then
-        uv venv --python "python${PYTHON_VERSION}" "${VENV_DIR}"
-        ok "Created ${VENV_DIR}"
+        uv venv --python "python${PYTHON_VERSION}" "${VENV_DIR}" 2>/dev/null \
+            || "python${PYTHON_VERSION}" -m venv "${VENV_DIR}"
+        ok "Created ${VENV_DIR} (Python ${PYTHON_VERSION})"
     else
         ok "${VENV_DIR} already exists"
     fi
@@ -230,7 +227,8 @@ setup_venv() {
 
 install_dependencies() {
     info "Installing project in editable mode with dev extras ..."
-    uv pip install -e ".[dev]"
+    uv pip install -e ".[dev]" 2>/dev/null \
+        || pip install --quiet -e ".[dev]"
     ok "Dependencies installed"
 }
 
