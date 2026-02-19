@@ -11,13 +11,15 @@ class TestGetConfig:
     def test_returns_defaults_when_no_overrides(self, monkeypatch):
         monkeypatch.delenv("ENV", raising=False)
         monkeypatch.delenv("CONFIG_PATH", raising=False)
-        for key in ("S3_RAW_BUCKET", "S3_CURATED_BUCKET"):
+        monkeypatch.delenv("AWS_ACCOUNT_ID", raising=False)
+        for key in ("S3_RAW_BUCKET", "S3_CURATED_BUCKET", "S3_WAREHOUSE_BUCKET"):
             monkeypatch.delenv(f"{_ENV_PREFIX}{key}", raising=False)
 
         cfg = get_config()
 
         assert cfg["env"] == "local"
-        assert cfg["s3_raw_bucket"] == f"{_ABBR}-raw"
+        # Bucket defaults include account_id if available, or just {abbr}-{purpose}-local
+        assert cfg["s3_raw_bucket"].startswith(f"{_ABBR}-raw-")
         assert cfg["iceberg_warehouse"].startswith("s3://")
 
     def test_env_variable_overrides_default(self, monkeypatch):

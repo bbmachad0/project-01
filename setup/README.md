@@ -107,7 +107,7 @@ Run this **once per AWS account** (dev, int, prod) with the appropriate credenti
 
 ## `domain.json`
 
-All domain-specific names derive from a single file at the repository root:
+All domain-specific names derive from a single file at `setup/domain.json`:
 
 ```json
 {
@@ -125,6 +125,19 @@ All domain-specific names derive from a single file at the repository root:
 
 Edit this file **before** running the bootstrap if you are adapting the
 repository for a different domain.
+
+### S3 Bucket Naming Convention
+
+All S3 buckets follow the AWS-recommended naming pattern:
+
+```
+{domain_abbr}-{purpose}-{account_id}-{env}
+```
+
+Example: `f01-raw-390403879405-dev`
+
+The `account_id` is resolved automatically from AWS credentials (never
+hardcoded). This ensures globally unique bucket names and clear ownership.
 
 > **Note:** the Terraform state bucket name (`tfstate-{AccountId}`) is
 > derived automatically from AWS credentials -- it is not stored in

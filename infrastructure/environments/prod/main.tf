@@ -1,7 +1,7 @@
 # ─── Prod Environment - Root Module ──────────────────────────────
 
 locals {
-  domain = jsondecode(file("${path.module}/../../../domain.json"))
+  domain = jsondecode(file("${path.module}/../../../setup/domain.json"))
   env    = "prod"
 }
 

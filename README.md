@@ -12,7 +12,7 @@ See **[setup/README.md](setup/README.md)** for the full step-by-step guide.
 Quick start:
 
 ```bash
-# Review domain.json, then:
+# Review setup/domain.json, then:
 ./setup/bootstrap.sh            # local venv
 ./setup/init-terraform.sh       # generate Terraform backend configs
 ```
@@ -23,7 +23,10 @@ Quick start:
 
 ```
 .
-├── domain.json                  # Single source of truth (names, region, versions)
+├── setup/
+│   ├── domain.json              # Single source of truth (names, region)
+│   ├── bootstrap.sh             # One-time setup script
+│   └── init-terraform.sh        # Generate Terraform backend configs
 ├── src/
 │   ├── core/                    # Shared Python library (packaged as .whl)
 │   └── jobs/                    # Glue job scripts (NOT in the wheel)

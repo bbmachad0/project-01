@@ -70,7 +70,7 @@ Shared across all projects within the domain:
 
 | Resource | Naming | Notes |
 |----------|--------|-------|
-| S3 buckets | `{abbr}-{layer}-{env}` | raw, refined, curated, artifacts |
+| S3 buckets | `{abbr}-{purpose}-{account_id}-{env}` | raw, curated, warehouse, artifacts |
 | Glue databases | `{abbr}_{layer}` | raw, refined, curated |
 | IAM base roles | `{abbr}-glue-base-{env}` | Common permissions |
 
@@ -108,11 +108,9 @@ terraform {
 
 ```ini
 # backend.conf (generated, git-ignored)
-bucket         = "f01-tfstate-dev"
-key            = "terraform/finance01-dev.tfstate"
+bucket         = "tfstate-390403879405"
 region         = "eu-west-1"
 use_lockfile   = true
-encrypt        = true
 ```
 
 Generate these files with:

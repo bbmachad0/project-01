@@ -32,7 +32,8 @@ RUN curl -fsSL \
 # ── Python dependencies ──────────────────────────────────────────
 WORKDIR /app
 
-COPY pyproject.toml domain.json ./
+COPY pyproject.toml ./
+COPY setup/domain.json ./setup/
 # Install in editable-friendly layout (build deps only first)
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir pyspark==${SPARK_VERSION} ".[dev]" \

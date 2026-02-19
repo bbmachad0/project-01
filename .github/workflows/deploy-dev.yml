@@ -1,7 +1,12 @@
 # ─── Deploy to Dev ────────────────────────────────────────────────
 # Triggered on push to the `dev` branch.
 # Uses path filters to skip unnecessary steps.
-# All config read from domain.json - no hardcoded project names.
+# All config read from setup/domain.json - no hardcoded project names.
+#
+# Deploy order:
+#   1. Terraform Foundation (S3, IAM, Glue databases)
+#   2. Upload Artifacts (wheel, job scripts to S3)
+#   3. Terraform Full Apply (Glue jobs, tables, pipelines that reference artifacts)
 
 name: Deploy - Dev
 
@@ -43,8 +48,8 @@ jobs:
       - name: Read domain.json
         id: domain
         run: |
-          echo "domain_abbr=$(jq -r .domain_abbr domain.json)" >> "$GITHUB_OUTPUT"
-          echo "aws_region=$(jq -r .aws_region domain.json)" >> "$GITHUB_OUTPUT"
+          echo "domain_abbr=$(jq -r .domain_abbr setup/domain.json)" >> "$GITHUB_OUTPUT"
+          echo "aws_region=$(jq -r .aws_region setup/domain.json)" >> "$GITHUB_OUTPUT"
 
       - name: Path filter
         uses: dorny/paths-filter@v3
@@ -58,7 +63,7 @@ jobs:
               - 'src/jobs/**'
             infra:
               - 'infrastructure/**'
-              - 'domain.json'
+              - 'setup/domain.json'
 
   # ── Deploy ───────────────────────────────────────────────────────
   deploy:
@@ -79,7 +84,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
           aws-region: ${{ needs.changes.outputs.aws_region }}
 
-      # ── Terraform (runs first to create infrastructure) ──────────
+      - name: Resolve AWS Account ID
+        id: aws
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+
+      # ── Step 1: Terraform Foundation (S3 buckets, IAM, databases) ─
       - name: Setup Terraform
         if: needs.changes.outputs.infra == 'true'
         uses: hashicorp/setup-terraform@v3
@@ -90,24 +101,21 @@ jobs:
         if: needs.changes.outputs.infra == 'true'
         working-directory: infrastructure/environments/${{ env.ENV }}
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REGION=$(jq -r .aws_region "$GITHUB_WORKSPACE/domain.json")
+          ACCOUNT_ID="${{ steps.aws.outputs.account_id }}"
+          REGION=$(jq -r .aws_region "$GITHUB_WORKSPACE/setup/domain.json")
           terraform init \
             -backend-config="bucket=tfstate-${ACCOUNT_ID}" \
             -backend-config="region=${REGION}" \
             -backend-config="use_lockfile=true"
 
-      - name: Terraform Plan
+      - name: Terraform Apply - Foundation
         if: needs.changes.outputs.infra == 'true'
         working-directory: infrastructure/environments/${{ env.ENV }}
-        run: terraform plan -out=tfplan -input=false
+        run: |
+          terraform plan -target=module.foundation -out=tfplan-foundation -input=false
+          terraform apply -auto-approve tfplan-foundation
 
-      - name: Terraform Apply
-        if: needs.changes.outputs.infra == 'true'
-        working-directory: infrastructure/environments/${{ env.ENV }}
-        run: terraform apply -auto-approve tfplan
-
-      # ── Build & Upload Wheel (only when core changed) ────────────
+      # ── Step 2: Upload Artifacts (wheel + scripts to S3) ─────────
       - name: Setup Python
         if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true'
         uses: actions/setup-python@v5
@@ -125,12 +133,19 @@ jobs:
         run: |
           WHEEL=$(ls dist/*.whl | head -1)
           aws s3 cp "$WHEEL" \
-            "s3://${ABBR}-artifacts-${ENV}/wheels/core-latest-py3-none-any.whl"
+            "s3://${ABBR}-artifacts-${{ steps.aws.outputs.account_id }}-${ENV}/wheels/core-latest-py3-none-any.whl"
 
-      # ── Upload Job Scripts (only when jobs changed) ──────────────
       - name: Upload job scripts to S3
         if: needs.changes.outputs.jobs == 'true'
         run: |
           aws s3 sync src/jobs/ \
-            "s3://${ABBR}-artifacts-${ENV}/jobs/" \
+            "s3://${ABBR}-artifacts-${{ steps.aws.outputs.account_id }}-${ENV}/jobs/" \
             --delete --exact-timestamps
+
+      # ── Step 3: Terraform Full Apply (projects referencing artifacts) ─
+      - name: Terraform Apply - Full
+        if: needs.changes.outputs.infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
+        run: |
+          terraform plan -out=tfplan -input=false
+          terraform apply -auto-approve tfplan

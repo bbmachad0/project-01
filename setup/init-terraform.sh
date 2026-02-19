@@ -13,7 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DOMAIN_JSON="${PROJECT_ROOT}/domain.json"
+DOMAIN_JSON="${SCRIPT_DIR}/domain.json"
 
 if [[ ! -f "${DOMAIN_JSON}" ]]; then
     echo "ERROR: domain.json not found at ${DOMAIN_JSON}" >&2

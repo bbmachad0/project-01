@@ -16,9 +16,9 @@ Domain  (this repository)
 
 ---
 
-## `domain.json` - Single Source of Truth
+## `setup/domain.json` - Single Source of Truth
 
-Every name, prefix, and convention derives from one file:
+Every name, prefix, and convention derives from one file at `setup/domain.json`:
 
 ```json
 {
@@ -31,23 +31,30 @@ Every name, prefix, and convention derives from one file:
 | Field | Usage |
 |-------|-------|
 | `domain_name` | Human-readable name, Terraform descriptions |
-| `domain_abbr` | S3 buckets (`f01-raw-dev`), Glue databases (`f01_raw`), job names |
+| `domain_abbr` | S3 buckets, Glue databases (`f01_raw`), job names |
 | `aws_region` | Provider region, `.env` generation |
-| `python_version` | Bootstrap validation, CI matrix |
-| `terraform_version` | CI validation, `required_version` |
+
+Edit this file **once** before running `setup/bootstrap.sh` to adapt the
+repository for a different domain.
 
 ---
 
 ## Data Layers
 
+S3 bucket naming follows the AWS-recommended convention:
+`{domain_abbr}-{purpose}-{account_id}-{env}`
+
+The `account_id` is resolved dynamically from AWS credentials - it is
+never hardcoded.
+
 | Layer | S3 Bucket | Glue Database | Table Format |
 |-------|-----------|---------------|--------------|
-| **raw** | `{abbr}-raw-{env}` | `{abbr}_raw` | Standard (Hive) |
-| **refined** | `{abbr}-refined-{env}` | `{abbr}_refined` | Iceberg |
-| **curated** | `{abbr}-curated-{env}` | `{abbr}_curated` | Iceberg |
+| **raw** | `{abbr}-raw-{account_id}-{env}` | `{abbr}_raw` | Standard (Hive) |
+| **refined** | `{abbr}-curated-{account_id}-{env}` | `{abbr}_refined` | Iceberg |
+| **curated** | `{abbr}-warehouse-{account_id}-{env}` | `{abbr}_curated` | Iceberg |
 
-An `artifacts` bucket (`{abbr}-artifacts-{env}`) stores wheels, job scripts,
-and Terraform state.
+An `artifacts` bucket (`{abbr}-artifacts-{account_id}-{env}`) stores wheels
+and job scripts.
 
 ---
 
@@ -55,13 +62,13 @@ and Terraform state.
 
 | Resource | Pattern | Example |
 |----------|---------|---------|
-| S3 bucket | `{abbr}-{layer}-{env}` | `f01-raw-dev` |
+| S3 bucket | `{abbr}-{purpose}-{account_id}-{env}` | `f01-raw-390403879405-dev` |
 | Glue database | `{abbr}_{layer}` | `f01_raw` |
 | Glue job | `{abbr}-{project_slug}-{job}-{env}` | `f01-pj01-daily-sales-dev` |
 | Pipeline | `{abbr}-{project_slug}-pipeline-{env}` | `f01-pj01-pipeline-dev` |
 | IAM role (Glue) | `{abbr}-glue-{project_slug}-{env}` | `f01-glue-pj01-dev` |
 | IAM role (Optimizer) | `{abbr}-optimizer-{project_slug}-{env}` | `f01-optimizer-pj01-dev` |
-| S3 data prefix | `{bucket}/{project_slug}/...` | `f01-raw-dev/pj01/...` |
+| S3 data prefix | `{bucket}/{project_slug}/...` | `f01-raw-390403879405-dev/pj01/...` |
 | Iceberg warehouse | `s3://{bucket}/{project_slug}/iceberg/` | |
 
 Each project declares a **`project_slug`** (short, unique abbreviation) used

@@ -1,12 +1,13 @@
 # ─── Data Mesh Domain Makefile ────────────────────────────────────
-# All config read from domain.json — edit that file, not this one.
+# All config read from setup/domain.json — edit that file, not this one.
 
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-# Read from domain.json (single source of truth)
-DOMAIN_ABBR  := $(shell jq -r .domain_abbr domain.json)
-AWS_REGION   := $(shell jq -r .aws_region domain.json)
+# Read from setup/domain.json (single source of truth)
+DOMAIN_ABBR  := $(shell jq -r .domain_abbr setup/domain.json)
+AWS_REGION   := $(shell jq -r .aws_region setup/domain.json)
+ACCOUNT_ID   := $(shell aws sts get-caller-identity --query Account --output text 2>/dev/null)
 
 PYTHON       := python3
 PIP          := pip
@@ -146,11 +147,11 @@ init-terraform: ## Regenerate all backend.conf files from domain.json
 .PHONY: upload-jobs
 upload-jobs: ## Sync job scripts to S3 artifacts bucket
 	aws s3 sync src/jobs/ \
-		s3://$(DOMAIN_ABBR)-artifacts-$(ENVIRONMENT)/jobs/ \
+		s3://$(DOMAIN_ABBR)-artifacts-$(ACCOUNT_ID)-$(ENVIRONMENT)/jobs/ \
 		--delete --exact-timestamps
 
 .PHONY: upload-wheel
 upload-wheel: build ## Build and upload wheel to S3
 	WHEEL=$$(ls $(WHEEL_DIR)/*.whl | head -1) && \
 	aws s3 cp "$$WHEEL" \
-		s3://$(DOMAIN_ABBR)-artifacts-$(ENVIRONMENT)/wheels/$(WHEEL_NAME)
+		s3://$(DOMAIN_ABBR)-artifacts-$(ACCOUNT_ID)-$(ENVIRONMENT)/wheels/$(WHEEL_NAME)

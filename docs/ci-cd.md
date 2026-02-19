@@ -52,12 +52,16 @@ running Terraform when only Python code changed.
 
 ### Deploy (`deploy-{dev,int,prod}.yml`)
 
-1. Checkout + read `domain.json`
+1. Checkout + read `setup/domain.json`
 2. Authenticate via OIDC
 3. Detect changes (paths-filter)
-4. Upload job scripts to S3 (if jobs changed)
-5. Build + upload wheel to S3 (if core changed)
-6. Terraform init + plan + apply (if infra changed)
+4. Resolve AWS Account ID
+5. **Terraform Foundation** - apply S3 buckets, IAM, Glue databases (`-target=module.foundation`)
+6. **Upload Artifacts** - build + upload wheel to S3, sync job scripts (if changed)
+7. **Terraform Full Apply** - apply Glue jobs, tables, pipelines that reference artifacts
+
+This three-phase order ensures S3 buckets exist before uploading artifacts,
+and artifacts exist before Glue job definitions reference them.
 
 ---
 

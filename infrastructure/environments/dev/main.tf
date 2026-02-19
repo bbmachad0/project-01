@@ -3,7 +3,7 @@
 # Backend is configured via partial config (see backend.conf).\
 
 locals {
-  domain = jsondecode(file("${path.module}/../../../domain.json"))
+  domain = jsondecode(file("${path.module}/../../../setup/domain.json"))
   env    = "dev"
 }
 
