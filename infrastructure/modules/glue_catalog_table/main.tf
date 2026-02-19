@@ -1,13 +1,11 @@
-# ─── Glue Catalog Table Module ───────────────────────────────────
-# Creates a Glue Data Catalog table.  Supports two formats:
+# ─── Glue Standard Table Module ──────────────────────────────────
+# Creates a standard (Hive) Glue Data Catalog table.
 #
-#   iceberg  - Apache Iceberg (open_table_format_input + Iceberg params)
-#   standard - Classic Hive-style external table (SerDe, input/output format)
+# For Iceberg tables, use the glue_iceberg_table module instead -
+# it bundles the table with its three mandatory optimizers.
 #
-# For Iceberg tables managed entirely by Spark jobs at runtime, you
-# may omit this module - Spark CREATE TABLE statements also register
-# in the Glue Catalog.  This module is useful when you want Terraform
-# to own the table definition for governance and drift detection.
+# This module is for RAW-layer or other non-Iceberg external tables
+# that use classic SerDe, InputFormat, and OutputFormat.
 
 # ─── Variables ───────────────────────────────────────────────────
 
@@ -33,17 +31,6 @@ variable "description" {
   default     = ""
 }
 
-variable "table_format" {
-  description = "Table format: 'iceberg' or 'standard'."
-  type        = string
-  default     = "iceberg"
-
-  validation {
-    condition     = contains(["iceberg", "standard"], var.table_format)
-    error_message = "table_format must be 'iceberg' or 'standard'."
-  }
-}
-
 variable "s3_location" {
   description = "S3 location for table data."
   type        = string
@@ -60,7 +47,7 @@ variable "columns" {
 }
 
 variable "partition_keys" {
-  description = "Partition key definitions (standard tables only; Iceberg uses hidden partitioning)."
+  description = "Partition key definitions."
   type = list(object({
     name = string
     type = string
@@ -75,42 +62,27 @@ variable "table_type" {
 }
 
 variable "serde_library" {
-  description = "SerDe serialization library class (standard tables)."
+  description = "SerDe serialization library class."
   type        = string
-  default     = ""
+  default     = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
 }
 
 variable "input_format" {
-  description = "Hadoop InputFormat class (standard tables)."
+  description = "Hadoop InputFormat class."
   type        = string
-  default     = ""
+  default     = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
 }
 
 variable "output_format" {
-  description = "Hadoop OutputFormat class (standard tables)."
+  description = "Hadoop OutputFormat class."
   type        = string
-  default     = ""
+  default     = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
 }
 
 variable "table_parameters" {
   description = "Additional key-value parameters for the table."
   type        = map(string)
   default     = {}
-}
-
-# ─── Locals ──────────────────────────────────────────────────────
-
-locals {
-  iceberg_parameters = {
-    "table_type"     = "ICEBERG"
-    "classification" = "iceberg"
-  }
-
-  final_parameters = (
-    var.table_format == "iceberg"
-    ? merge(local.iceberg_parameters, var.table_parameters)
-    : var.table_parameters
-  )
 }
 
 # ─── Resource ────────────────────────────────────────────────────
@@ -121,20 +93,8 @@ resource "aws_glue_catalog_table" "this" {
   catalog_id    = var.catalog_id
   description   = var.description
   table_type    = var.table_type
-  parameters    = local.final_parameters
+  parameters    = var.table_parameters
 
-  # ── Iceberg open-table-format input ────────────────────────────
-  dynamic "open_table_format_input" {
-    for_each = var.table_format == "iceberg" ? [1] : []
-    content {
-      iceberg_input {
-        metadata_operation = "CREATE"
-        version            = "2"
-      }
-    }
-  }
-
-  # ── Storage descriptor ─────────────────────────────────────────
   storage_descriptor {
     location = var.s3_location
 
@@ -147,21 +107,16 @@ resource "aws_glue_catalog_table" "this" {
       }
     }
 
-    # Standard tables - SerDe info
-    dynamic "ser_de_info" {
-      for_each = var.table_format == "standard" && var.serde_library != "" ? [1] : []
-      content {
-        serialization_library = var.serde_library
-      }
+    ser_de_info {
+      serialization_library = var.serde_library
     }
 
-    input_format  = var.table_format == "standard" && var.input_format != "" ? var.input_format : null
-    output_format = var.table_format == "standard" && var.output_format != "" ? var.output_format : null
+    input_format  = var.input_format
+    output_format = var.output_format
   }
 
-  # ── Partition keys (standard tables only) ──────────────────────
   dynamic "partition_keys" {
-    for_each = var.table_format == "standard" ? var.partition_keys : []
+    for_each = var.partition_keys
     content {
       name = partition_keys.value.name
       type = partition_keys.value.type

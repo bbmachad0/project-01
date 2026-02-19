@@ -7,27 +7,27 @@ is encapsulated here so that job files stay declarative.
 Usage::
 
     from core.io.writers import write_iceberg, write_parquet
-    write_iceberg(df, "glue_catalog.nl_curated.daily_sales", mode="append")
+    write_iceberg(df, "glue_catalog.{abbr}_curated.daily_sales", mode="append")
     write_parquet(df, "s3://bucket/curated/daily_sales/", mode="overwrite")
 """
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from pyspark.sql import DataFrame
-
 
 # ---------------------------------------------------------------------------
 # Iceberg
 # ---------------------------------------------------------------------------
 
+
 def write_iceberg(
     df: DataFrame,
     table: str,
     mode: str = "append",
-    partition_by: Optional[Sequence[str]] = None,
-    sort_by: Optional[Sequence[str]] = None,
+    partition_by: Sequence[str] | None = None,
+    sort_by: Sequence[str] | None = None,
 ) -> None:
     """Write a DataFrame to an Iceberg table.
 
@@ -37,7 +37,7 @@ def write_iceberg(
         Source DataFrame.
     table:
         Fully-qualified Iceberg table reference
-        (e.g. ``glue_catalog.nl_curated.daily_sales``).
+        (e.g. ``glue_catalog.{abbr}_curated.daily_sales``).
     mode:
         Spark write mode - ``append``, ``overwrite``, or ``error``.
     partition_by:
@@ -53,9 +53,7 @@ def write_iceberg(
         writer = writer.partitionedBy(*partition_by)
 
     if sort_by:
-        writer = writer.tableProperty(
-            "write.sort-order", ",".join(sort_by)
-        )
+        writer = writer.tableProperty("write.sort-order", ",".join(sort_by))
 
     if mode == "overwrite":
         writer.overwritePartitions()
@@ -110,12 +108,13 @@ def merge_iceberg(
 # Parquet / Generic
 # ---------------------------------------------------------------------------
 
+
 def write_parquet(
     df: DataFrame,
     path: str,
     mode: str = "overwrite",
-    partition_by: Optional[Sequence[str]] = None,
-    coalesce: Optional[int] = None,
+    partition_by: Sequence[str] | None = None,
+    coalesce: int | None = None,
 ) -> None:
     """Write a DataFrame as Parquet files.
 

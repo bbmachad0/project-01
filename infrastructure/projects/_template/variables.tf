@@ -42,13 +42,8 @@ variable "warehouse_bucket" {
   type        = string
 }
 
-variable "glue_execution_role_arn" {
-  description = "IAM role ARN for Glue job execution."
-  type        = string
-}
-
-variable "table_optimizer_role_arn" {
-  description = "IAM role ARN for Glue Table Optimizer."
+variable "region" {
+  description = "AWS region."
   type        = string
 }
 

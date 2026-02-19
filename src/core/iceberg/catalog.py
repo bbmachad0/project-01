@@ -10,12 +10,10 @@ Usage::
         expire_snapshots,
         rewrite_data_files,
     )
-    create_table_if_not_exists(spark, "glue_catalog.nl_curated.orders", schema_ddl)
+    create_table_if_not_exists(spark, "glue_catalog.{abbr}_curated.orders", schema_ddl)
 """
 
 from __future__ import annotations
-
-from typing import Optional, Sequence
 
 from pyspark.sql import SparkSession
 
@@ -24,9 +22,9 @@ def create_table_if_not_exists(
     spark: SparkSession,
     table: str,
     schema_ddl: str,
-    partition_spec: Optional[str] = None,
-    table_properties: Optional[dict] = None,
-    location: Optional[str] = None,
+    partition_spec: str | None = None,
+    table_properties: dict | None = None,
+    location: str | None = None,
 ) -> None:
     """Create an Iceberg table if it does not already exist.
 
@@ -35,7 +33,7 @@ def create_table_if_not_exists(
     spark:
         Active Spark session.
     table:
-        Fully-qualified table name (e.g. ``glue_catalog.nl_curated.orders``).
+        Fully-qualified table name (e.g. ``glue_catalog.{abbr}_curated.orders``).
     schema_ddl:
         Column definitions in Spark DDL syntax, e.g.
         ``"id BIGINT, name STRING, ts TIMESTAMP"``.

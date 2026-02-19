@@ -17,21 +17,16 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Optional
 
-
-_DEFAULT_FORMAT = (
-    "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
-)
+_DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 _JSON_FORMAT = (
-    '{"ts":"%(asctime)s","level":"%(levelname)s",'
-    '"logger":"%(name)s","msg":"%(message)s"}'
+    '{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}'
 )
 
 
 def get_logger(
     name: str,
-    level: Optional[int] = None,
+    level: int | None = None,
     json_output: bool = False,
 ) -> logging.Logger:
     """Return a configured :class:`logging.Logger`.
@@ -52,9 +47,7 @@ def get_logger(
         # Already configured - avoid duplicate handlers on re-import.
         return logger
 
-    resolved_level = level or getattr(
-        logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO
-    )
+    resolved_level = level or getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
     logger.setLevel(resolved_level)
 
     handler = logging.StreamHandler(sys.stderr)

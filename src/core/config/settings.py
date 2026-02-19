@@ -2,9 +2,9 @@
 
 Loads configuration values from (in order of precedence):
 1. Explicit keyword arguments
-2. Environment variables (``NL_<KEY>``)
+2. Environment variables (``{ABBR}_<KEY>``, derived from domain.json)
 3. A YAML / JSON config file pointed to by ``CONFIG_PATH``
-4. Hard-coded defaults
+4. Defaults derived from ``domain.json``
 
 This keeps every job free of environment-specific literals.
 
@@ -20,26 +20,41 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-_ENV_PREFIX = "NL_"
+def _load_domain() -> dict[str, str]:
+    """Read domain.json from the repository root (best-effort)."""
+    candidates = [
+        Path(__file__).resolve().parents[3] / "domain.json",  # src/core/config -> repo root
+        Path.cwd() / "domain.json",
+    ]
+    for p in candidates:
+        if p.is_file():
+            with p.open() as f:
+                return json.load(f)
+    return {}
 
-_DEFAULTS: Dict[str, str] = {
+
+_DOMAIN = _load_domain()
+_ABBR = _DOMAIN.get("domain_abbr", "xx")
+_ENV_PREFIX = f"{_ABBR.upper().replace('-', '_')}_"
+
+_DEFAULTS: dict[str, str] = {
     "env": "local",
-    "s3_raw_bucket": "nl-raw",
-    "s3_curated_bucket": "nl-curated",
-    "s3_artifacts_bucket": "nl-artifacts",
-    "iceberg_warehouse": "s3://nl-warehouse/iceberg/",
-    "iceberg_database_raw": "nl_raw",
-    "iceberg_database_refined": "nl_refined",
-    "iceberg_database_curated": "nl_curated",
+    "s3_raw_bucket": f"{_ABBR}-raw",
+    "s3_curated_bucket": f"{_ABBR}-curated",
+    "s3_artifacts_bucket": f"{_ABBR}-artifacts",
+    "iceberg_warehouse": f"s3://{_ABBR}-warehouse/iceberg/",
+    "iceberg_database_raw": f"{_ABBR.replace('-', '_')}_raw",
+    "iceberg_database_refined": f"{_ABBR.replace('-', '_')}_refined",
+    "iceberg_database_curated": f"{_ABBR.replace('-', '_')}_curated",
     "glue_catalog_id": "",
     "log_level": "INFO",
 }
 
 
-def _load_config_file(path: Optional[str] = None) -> Dict[str, Any]:
+def _load_config_file(path: str | None = None) -> dict[str, Any]:
     """Load an optional JSON or YAML config file."""
     config_path = path or os.getenv("CONFIG_PATH")
     if not config_path:
@@ -54,6 +69,7 @@ def _load_config_file(path: Optional[str] = None) -> Dict[str, Any]:
     if p.suffix in (".yaml", ".yml"):
         try:
             import yaml  # optional dependency
+
             return yaml.safe_load(text) or {}
         except ImportError:
             return {}
@@ -62,9 +78,9 @@ def _load_config_file(path: Optional[str] = None) -> Dict[str, Any]:
 
 
 def get_config(
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
     **overrides: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return a merged configuration dictionary.
 
     Parameters
@@ -74,7 +90,7 @@ def get_config(
     **overrides:
         Explicit overrides that take highest precedence.
     """
-    cfg: Dict[str, Any] = dict(_DEFAULTS)
+    cfg: dict[str, Any] = dict(_DEFAULTS)
 
     # Layer 1 - config file
     cfg.update(_load_config_file(config_path))

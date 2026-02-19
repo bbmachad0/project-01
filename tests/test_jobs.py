@@ -10,8 +10,6 @@ No manual test creation needed - just add a new job and it is tested.
 """
 
 import ast
-import importlib
-import sys
 from pathlib import Path
 
 import pytest
@@ -37,6 +35,7 @@ ALL_JOBS = list(_discover_jobs())
 
 # ── Tests ────────────────────────────────────────────────────────
 
+
 @pytest.mark.skipif(not ALL_JOBS, reason="No job scripts found")
 class TestJobScripts:
     """Generic validations applied to every discovered job script."""
@@ -51,17 +50,15 @@ class TestJobScripts:
     def test_defines_main_function(self, job_path):
         """Job file must define a callable main()."""
         tree = ast.parse(job_path.read_text(encoding="utf-8"))
-        func_names = [
-            node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
-        ]
+        func_names = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
         assert "main" in func_names, f"{job_path.name} must define a main() function"
 
     @pytest.mark.parametrize("job_path", ALL_JOBS)
     def test_has_name_guard(self, job_path):
         """Job file must have an ``if __name__ == "__main__"`` block."""
         source = job_path.read_text(encoding="utf-8")
-        assert '__name__' in source and '__main__' in source, (
-            f"{job_path.name} must have: if __name__ == \"__main__\""
+        assert "__name__" in source and "__main__" in source, (
+            f'{job_path.name} must have: if __name__ == "__main__"'
         )
 
     @pytest.mark.parametrize("job_path", ALL_JOBS)

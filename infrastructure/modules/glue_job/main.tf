@@ -153,12 +153,7 @@ resource "aws_glue_job" "this" {
 
   default_arguments = local.merged_arguments
 
-  dynamic "connections" {
-    for_each = length(var.connections) > 0 ? [1] : []
-    content {
-      connections = var.connections
-    }
-  }
+  connections = length(var.connections) > 0 ? var.connections : null
 
   tags = var.tags
 }

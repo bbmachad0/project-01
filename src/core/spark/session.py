@@ -18,10 +18,10 @@ Supported ``ENV`` values:
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from pyspark.sql import SparkSession
 
+from core.config.settings import _ABBR
 
 _ENV_KEY = "ENV"
 _LOCAL_ENV = "local"
@@ -39,7 +39,7 @@ def _is_local() -> bool:
 def _build_local_session(
     app_name: str,
     warehouse_path: str,
-    glue_catalog_id: Optional[str] = None,
+    glue_catalog_id: str | None = None,
 ) -> SparkSession:
     """Create a local SparkSession configured for Iceberg + Glue Catalog.
 
@@ -85,9 +85,7 @@ def _build_local_session(
     )
 
     if glue_catalog_id:
-        builder = builder.config(
-            "spark.sql.catalog.glue_catalog.glue.id", glue_catalog_id
-        )
+        builder = builder.config("spark.sql.catalog.glue_catalog.glue.id", glue_catalog_id)
 
     return builder.getOrCreate()
 
@@ -103,9 +101,9 @@ def _build_glue_session() -> SparkSession:
 
 
 def get_spark(
-    app_name: str = "nl-glue-job",
-    warehouse_path: str = "s3://nl-warehouse/iceberg/",
-    glue_catalog_id: Optional[str] = None,
+    app_name: str = f"{_ABBR}-glue-job",
+    warehouse_path: str = f"s3://{_ABBR}-warehouse/iceberg/",
+    glue_catalog_id: str | None = None,
 ) -> SparkSession:
     """Return an environment-appropriate SparkSession.
 

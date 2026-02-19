@@ -108,10 +108,10 @@ terraform {
 
 ```ini
 # backend.conf (generated, git-ignored)
-bucket         = "nl-artifacts-dev"
-key            = "terraform/niederlassung-dev.tfstate"
+bucket         = "f01-tfstate-dev"
+key            = "terraform/finance01-dev.tfstate"
 region         = "eu-west-1"
-dynamodb_table = "nl-terraform-locks-dev"
+use_lockfile   = true
 encrypt        = true
 ```
 

@@ -1,16 +1,21 @@
 # ─── IAM Table Optimizer Role ────────────────────────────────────
 # Dedicated IAM role assumed by the Glue Table Optimizer service.
-# Scoped to the project's S3 buckets and Glue Catalog databases.
+# Scoped to the project's S3 prefix and domain Glue Catalog databases.
 #
 # Permissions:
-#   - S3 read / write / delete (compaction rewrites, orphan cleanup)
+#   - S3 read / write / delete scoped to {project_slug}/* prefix
 #   - Glue Catalog read / update (table metadata refresh)
 #   - CloudWatch Logs (optimizer execution logs)
 
 # ─── Variables ───────────────────────────────────────────────────
 
-variable "project" {
-  description = "Project identifier - used as the IAM security boundary."
+variable "domain_abbr" {
+  description = "Domain abbreviation - used for Glue Catalog database scoping ({domain_abbr}_*)."
+  type        = string
+}
+
+variable "project_slug" {
+  description = "Project slug - used for role naming and S3 prefix scoping."
   type        = string
 }
 
@@ -30,7 +35,7 @@ variable "region" {
 }
 
 variable "s3_bucket_arns" {
-  description = "S3 bucket ARNs containing Iceberg table data."
+  description = "S3 bucket ARNs containing Iceberg table data. Access scoped to project_slug prefix."
   type        = list(string)
 }
 
@@ -54,7 +59,7 @@ data "aws_iam_policy_document" "assume_role" {
 
 data "aws_iam_policy_document" "table_optimizer" {
 
-  # ── S3: read / write / delete for compaction & orphan cleanup ──
+  # ── S3: read / write / delete scoped to project prefix ────────
 
   statement {
     sid = "S3ObjectAccess"
@@ -63,16 +68,22 @@ data "aws_iam_policy_document" "table_optimizer" {
       "s3:PutObject",
       "s3:DeleteObject",
     ]
-    resources = [for arn in var.s3_bucket_arns : "${arn}/*"]
+    resources = [for arn in var.s3_bucket_arns : "${arn}/${var.project_slug}/*"]
   }
 
   statement {
-    sid = "S3BucketAccess"
+    sid = "S3BucketList"
     actions = [
       "s3:ListBucket",
       "s3:GetBucketLocation",
     ]
     resources = var.s3_bucket_arns
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["${var.project_slug}/*", "${var.project_slug}"]
+    }
   }
 
   # ── Glue Catalog: read + update for table metadata refresh ─────
@@ -87,8 +98,8 @@ data "aws_iam_policy_document" "table_optimizer" {
     ]
     resources = [
       "arn:aws:glue:${var.region}:${var.account_id}:catalog",
-      "arn:aws:glue:${var.region}:${var.account_id}:database/${var.project}_*",
-      "arn:aws:glue:${var.region}:${var.account_id}:table/${var.project}_*/*",
+      "arn:aws:glue:${var.region}:${var.account_id}:database/${var.domain_abbr}_*",
+      "arn:aws:glue:${var.region}:${var.account_id}:table/${var.domain_abbr}_*/*",
     ]
   }
 
@@ -110,13 +121,13 @@ data "aws_iam_policy_document" "table_optimizer" {
 # ─── Resources ───────────────────────────────────────────────────
 
 resource "aws_iam_role" "table_optimizer" {
-  name               = "${var.project}-table-optimizer-${var.env}"
+  name               = "${var.domain_abbr}-optimizer-${var.project_slug}-${var.env}"
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
   tags               = var.tags
 }
 
 resource "aws_iam_role_policy" "table_optimizer" {
-  name   = "${var.project}-table-optimizer-policy"
+  name   = "${var.domain_abbr}-optimizer-${var.project_slug}-policy"
   role   = aws_iam_role.table_optimizer.id
   policy = data.aws_iam_policy_document.table_optimizer.json
 }

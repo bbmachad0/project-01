@@ -71,6 +71,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
     id     = "cleanup-noncurrent"
     status = "Enabled"
 
+    filter {}
+
     noncurrent_version_expiration {
       noncurrent_days = var.lifecycle_noncurrent_days
     }

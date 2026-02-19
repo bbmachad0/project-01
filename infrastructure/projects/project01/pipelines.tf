@@ -2,7 +2,7 @@
 # Compose Glue Jobs into Step Functions state machines.
 #
 # Naming convention:  {domain_abbr}-{project_slug}-pipeline-{name}-{env}
-# Example:            nl-sales-pipeline-ingest-dev
+# Example:            f01-sales-pipeline-ingest-dev
 #
 # Example:
 #

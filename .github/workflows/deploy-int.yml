@@ -79,6 +79,28 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_INT }}
           aws-region: ${{ needs.changes.outputs.aws_region }}
 
+      # ── Terraform (runs first to create infrastructure) ──────────
+      - name: Setup Terraform
+        if: needs.changes.outputs.infra == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        if: needs.changes.outputs.infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
+        run: terraform init -backend-config=backend.conf
+
+      - name: Terraform Plan
+        if: needs.changes.outputs.infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Terraform Apply
+        if: needs.changes.outputs.infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
+        run: terraform apply -auto-approve tfplan
+
       # ── Build & Upload Wheel (only when core changed) ────────────
       - name: Setup Python
         if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true'
@@ -106,25 +128,3 @@ jobs:
           aws s3 sync src/jobs/ \
             "s3://${ABBR}-artifacts-${ENV}/jobs/" \
             --delete --exact-timestamps
-
-      # ── Terraform (only when infra changed) ──────────────────────
-      - name: Setup Terraform
-        if: needs.changes.outputs.infra == 'true'
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Terraform Init
-        if: needs.changes.outputs.infra == 'true'
-        working-directory: infrastructure/environments/${{ env.ENV }}
-        run: terraform init -backend-config=backend.conf
-
-      - name: Terraform Plan
-        if: needs.changes.outputs.infra == 'true'
-        working-directory: infrastructure/environments/${{ env.ENV }}
-        run: terraform plan -out=tfplan -input=false
-
-      - name: Terraform Apply
-        if: needs.changes.outputs.infra == 'true'
-        working-directory: infrastructure/environments/${{ env.ENV }}
-        run: terraform apply -auto-approve tfplan

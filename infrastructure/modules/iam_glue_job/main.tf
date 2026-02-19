@@ -2,16 +2,22 @@
 # Purpose-built IAM role for AWS Glue job execution in a Data Mesh
 # domain.  Scoped to project-level boundaries:
 #
-#   - S3 access limited to provided bucket ARNs
-#   - Glue Catalog limited to {project}_* databases + "default"
-#   - SSM Parameter Store read under /{project}/*
+#   - S3 data access limited to {project_slug}/* prefix in each bucket
+#   - S3 artifacts access (read + temp write) for scripts and wheels
+#   - Glue Catalog limited to {domain_abbr}_* databases + "default"
+#   - SSM Parameter Store read under /{project_slug}/*
 #   - CloudWatch Logs for /aws-glue/* log groups
 #   - EC2 networking for VPC-connected jobs
 
 # ─── Variables ───────────────────────────────────────────────────
 
-variable "project" {
-  description = "Project identifier - used as the IAM security boundary."
+variable "domain_abbr" {
+  description = "Domain abbreviation - used for Glue Catalog database scoping ({domain_abbr}_*)."
+  type        = string
+}
+
+variable "project_slug" {
+  description = "Project slug - used for role naming and S3 prefix scoping."
   type        = string
 }
 
@@ -31,8 +37,13 @@ variable "region" {
 }
 
 variable "s3_bucket_arns" {
-  description = "List of S3 bucket ARNs the Glue job may access."
+  description = "S3 bucket ARNs for data layers (raw, curated, warehouse). Access scoped to project_slug prefix."
   type        = list(string)
+}
+
+variable "s3_artifacts_bucket_arn" {
+  description = "S3 bucket ARN for artifacts (scripts, wheels, glue-temp). Full read + temp write."
+  type        = string
 }
 
 variable "tags" {
@@ -55,25 +66,59 @@ data "aws_iam_policy_document" "assume_role" {
 
 data "aws_iam_policy_document" "glue_job" {
 
-  # ── S3: object-level access on project buckets ─────────────────
+  # ── S3: object-level access on data buckets (project-prefix scoped) ──
 
   statement {
-    sid = "S3ObjectAccess"
+    sid = "S3DataObjectAccess"
     actions = [
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject",
     ]
-    resources = [for arn in var.s3_bucket_arns : "${arn}/*"]
+    resources = [for arn in var.s3_bucket_arns : "${arn}/${var.project_slug}/*"]
   }
 
   statement {
-    sid = "S3BucketAccess"
+    sid = "S3DataBucketList"
     actions = [
       "s3:ListBucket",
       "s3:GetBucketLocation",
     ]
     resources = var.s3_bucket_arns
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["${var.project_slug}/*", "${var.project_slug}"]
+    }
+  }
+
+  # ── S3: artifacts bucket (read scripts/wheels + write temp) ────
+
+  statement {
+    sid = "S3ArtifactsRead"
+    actions = [
+      "s3:GetObject",
+    ]
+    resources = ["${var.s3_artifacts_bucket_arn}/*"]
+  }
+
+  statement {
+    sid = "S3ArtifactsTempWrite"
+    actions = [
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = ["${var.s3_artifacts_bucket_arn}/glue-temp/*"]
+  }
+
+  statement {
+    sid = "S3ArtifactsBucketList"
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+    ]
+    resources = [var.s3_artifacts_bucket_arn]
   }
 
   # ── Glue Data Catalog: project databases + default (Iceberg) ───
@@ -92,8 +137,8 @@ data "aws_iam_policy_document" "glue_job" {
     ]
     resources = [
       "arn:aws:glue:${var.region}:${var.account_id}:catalog",
-      "arn:aws:glue:${var.region}:${var.account_id}:database/${var.project}_*",
-      "arn:aws:glue:${var.region}:${var.account_id}:table/${var.project}_*/*",
+      "arn:aws:glue:${var.region}:${var.account_id}:database/${var.domain_abbr}_*",
+      "arn:aws:glue:${var.region}:${var.account_id}:table/${var.domain_abbr}_*/*",
       "arn:aws:glue:${var.region}:${var.account_id}:database/default",
       "arn:aws:glue:${var.region}:${var.account_id}:table/default/*",
     ]
@@ -113,8 +158,8 @@ data "aws_iam_policy_document" "glue_job" {
     ]
     resources = [
       "arn:aws:glue:${var.region}:${var.account_id}:catalog",
-      "arn:aws:glue:${var.region}:${var.account_id}:database/${var.project}_*",
-      "arn:aws:glue:${var.region}:${var.account_id}:table/${var.project}_*/*",
+      "arn:aws:glue:${var.region}:${var.account_id}:database/${var.domain_abbr}_*",
+      "arn:aws:glue:${var.region}:${var.account_id}:table/${var.domain_abbr}_*/*",
     ]
   }
 
@@ -128,7 +173,7 @@ data "aws_iam_policy_document" "glue_job" {
       "ssm:GetParametersByPath",
     ]
     resources = [
-      "arn:aws:ssm:${var.region}:${var.account_id}:parameter/${var.project}/*",
+      "arn:aws:ssm:${var.region}:${var.account_id}:parameter/${var.project_slug}/*",
     ]
   }
 
@@ -192,13 +237,13 @@ data "aws_iam_policy_document" "glue_job" {
 # ─── Resources ───────────────────────────────────────────────────
 
 resource "aws_iam_role" "glue_job" {
-  name               = "${var.project}-glue-job-${var.env}"
+  name               = "${var.domain_abbr}-glue-${var.project_slug}-${var.env}"
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
   tags               = var.tags
 }
 
 resource "aws_iam_role_policy" "glue_job" {
-  name   = "${var.project}-glue-job-policy"
+  name   = "${var.domain_abbr}-glue-${var.project_slug}-policy"
   role   = aws_iam_role.glue_job.id
   policy = data.aws_iam_policy_document.glue_job.json
 }

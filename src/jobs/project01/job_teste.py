@@ -1,14 +1,13 @@
-"""fin01 - Job teste."""
+"""project01 - Job teste."""
 
-import sys
-from core.spark.session import get_spark
 from core.config.settings import get_config
 from core.io.writers import write_iceberg
 from core.logging.logger import get_logger
+from core.spark.session import get_spark
 
 
 def main() -> None:
-    spark = get_spark(app_name="fin01-teste")
+    spark = get_spark(app_name="project01-teste")
     cfg = get_config()
     log = get_logger(__name__)
 

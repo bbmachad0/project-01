@@ -59,8 +59,8 @@ All domain-specific names derive from a single file at the repository root:
 
 ```json
 {
-  "domain_name": "niederlassung",
-  "domain_abbr": "nl",
+  "domain_name": "finance01",
+  "domain_abbr": "f01",
   "aws_region": "eu-west-1"
 }
 ```

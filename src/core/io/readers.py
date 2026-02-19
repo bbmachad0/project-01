@@ -6,13 +6,13 @@ only a :class:`SparkSession` plus read-specific parameters.
 Usage::
 
     from core.io.readers import read_iceberg, read_parquet
-    df = read_iceberg(spark, "glue_catalog.nl_raw.orders")
+    df = read_iceberg(spark, "glue_catalog.{abbr}_raw.orders")
     df = read_parquet(spark, "s3://bucket/raw/events/")
 """
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from pyspark.sql import DataFrame, SparkSession
 
@@ -20,8 +20,8 @@ from pyspark.sql import DataFrame, SparkSession
 def read_iceberg(
     spark: SparkSession,
     table: str,
-    snapshot_id: Optional[int] = None,
-    columns: Optional[Sequence[str]] = None,
+    snapshot_id: int | None = None,
+    columns: Sequence[str] | None = None,
 ) -> DataFrame:
     """Read an Iceberg table via Spark SQL catalog.
 
@@ -31,7 +31,7 @@ def read_iceberg(
         Active Spark session.
     table:
         Fully-qualified Iceberg table reference
-        (e.g. ``glue_catalog.nl_curated.customers``).
+        (e.g. ``glue_catalog.{abbr}_curated.customers``).
     snapshot_id:
         Optional Iceberg snapshot for time-travel queries.
     columns:
@@ -53,8 +53,8 @@ def read_iceberg(
 def read_parquet(
     spark: SparkSession,
     path: str,
-    schema: Optional[str] = None,
-    columns: Optional[Sequence[str]] = None,
+    schema: str | None = None,
+    columns: Sequence[str] | None = None,
 ) -> DataFrame:
     """Read Parquet files from an S3 or local path.
 
@@ -87,7 +87,7 @@ def read_csv(
     path: str,
     header: bool = True,
     delimiter: str = ",",
-    schema: Optional[str] = None,
+    schema: str | None = None,
 ) -> DataFrame:
     """Read CSV files from an S3 or local path.
 
@@ -121,7 +121,7 @@ def read_json(
     spark: SparkSession,
     path: str,
     multiline: bool = False,
-    schema: Optional[str] = None,
+    schema: str | None = None,
 ) -> DataFrame:
     """Read JSON files from an S3 or local path."""
     reader = spark.read.format("json").option("multiLine", str(multiline).lower())

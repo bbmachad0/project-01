@@ -2,7 +2,7 @@
 # Data-lake layer buckets + artifacts bucket for the domain.
 #
 # Naming convention:  {domain_abbr}-{layer}-{env}
-# Example:            nl-raw-dev
+# Example:            f01-raw-dev
 
 module "s3_raw" {
   source      = "../modules/s3_bucket"

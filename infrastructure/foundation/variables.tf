@@ -1,7 +1,14 @@
 # ─── Foundation - Variables & Locals ─────────────────────────────
 
+# ─── Data Sources ────────────────────────────────────────────────
+
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+# ─── Variables ───────────────────────────────────────────────────
+
 variable "domain_name" {
-  description = "Full domain name (e.g. niederlassung). Used in tags and descriptions."
+  description = "Full domain name (e.g. finance01). Used in tags and descriptions."
   type        = string
 }
 

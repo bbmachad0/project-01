@@ -18,12 +18,11 @@ locals {
     domain_abbr             = var.domain_abbr
     env                     = var.env
     account_id              = var.account_id
+    region                  = var.region
     artifacts_bucket        = var.artifacts_bucket
     raw_bucket              = var.raw_bucket
     curated_bucket          = var.curated_bucket
     warehouse_bucket        = var.warehouse_bucket
-    glue_execution_role_arn = var.glue_execution_role_arn
-    table_optimizer_role_arn = var.table_optimizer_role_arn
     sfn_execution_role_arn  = var.sfn_execution_role_arn
     db_raw_name             = var.db_raw_name
     db_refined_name         = var.db_refined_name
@@ -32,21 +31,20 @@ locals {
   }
 }
 
-# ─── Project: Fin01 ──────────────────────────────────────────────
+# ─── Project: Project01 ──────────────────────────────────────────────
 
-module "fin01" {
-  source = "./fin01"
+module "project01" {
+  source = "./project01"
 
   domain_abbr             = local.shared.domain_abbr
-  project_slug            = "f01"
+  project_slug            = "pj01"
   env                     = local.shared.env
   account_id              = local.shared.account_id
+  region                  = local.shared.region
   artifacts_bucket        = local.shared.artifacts_bucket
   raw_bucket              = local.shared.raw_bucket
   curated_bucket          = local.shared.curated_bucket
   warehouse_bucket        = local.shared.warehouse_bucket
-  glue_execution_role_arn = local.shared.glue_execution_role_arn
-  table_optimizer_role_arn = local.shared.table_optimizer_role_arn
   sfn_execution_role_arn  = local.shared.sfn_execution_role_arn
   db_raw_name             = local.shared.db_raw_name
   db_refined_name         = local.shared.db_refined_name

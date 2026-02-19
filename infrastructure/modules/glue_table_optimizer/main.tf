@@ -1,12 +1,16 @@
-# ─── Glue Table Optimizer Module ─────────────────────────────────
+# ─── Glue Catalog Table Optimizer Module ─────────────────────────
 # Provisions the three Iceberg table maintenance optimizers
 # available in AWS Glue:
 #
-#   compaction          - merges small files to improve query performance
+#   compaction           - merges small files to improve query performance
 #   orphan_file_deletion - removes unreferenced data files
-#   retention           - expires old Iceberg snapshots
+#   retention            - expires old Iceberg snapshots
 #
-# Each optimizer can be independently enabled / disabled per table.
+# Every Iceberg table MUST have all three.  Standard (Hive) tables
+# do NOT support optimizers - do not call this module for them.
+#
+# Resource: aws_glue_catalog_table_optimizer
+# Docs: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/glue_catalog_table_optimizer
 
 # ─── Variables ───────────────────────────────────────────────────
 
@@ -30,29 +34,40 @@ variable "role_arn" {
   type        = string
 }
 
-variable "enable_compaction" {
-  description = "Enable Iceberg auto-compaction."
+variable "s3_location" {
+  description = "S3 location of the Iceberg table data (for orphan file deletion)."
+  type        = string
+}
+
+variable "snapshot_retention_days" {
+  description = "Number of days to retain Iceberg snapshots."
+  type        = number
+  default     = 7
+}
+
+variable "snapshots_to_retain" {
+  description = "Minimum number of snapshots to keep regardless of age."
+  type        = number
+  default     = 3
+}
+
+variable "clean_expired_files" {
+  description = "Whether to delete data files referenced only by expired snapshots."
   type        = bool
   default     = true
 }
 
-variable "enable_orphan_deletion" {
-  description = "Enable orphan file deletion."
-  type        = bool
-  default     = true
-}
-
-variable "enable_snapshot_retention" {
-  description = "Enable snapshot retention (expired snapshot cleanup)."
-  type        = bool
-  default     = true
+variable "orphan_file_retention_days" {
+  description = "Number of days before an orphan file is eligible for deletion."
+  type        = number
+  default     = 7
 }
 
 # ─── Resources ───────────────────────────────────────────────────
 
-resource "aws_glue_table_optimizer" "compaction" {
-  count = var.enable_compaction ? 1 : 0
+# 1. Compaction - merges small files into larger ones.
 
+resource "aws_glue_catalog_table_optimizer" "compaction" {
   catalog_id    = var.catalog_id
   database_name = var.database_name
   table_name    = var.table_name
@@ -64,23 +79,9 @@ resource "aws_glue_table_optimizer" "compaction" {
   }
 }
 
-resource "aws_glue_table_optimizer" "orphan_file_deletion" {
-  count = var.enable_orphan_deletion ? 1 : 0
+# 2. Snapshot Retention - expires old Iceberg snapshots.
 
-  catalog_id    = var.catalog_id
-  database_name = var.database_name
-  table_name    = var.table_name
-  type          = "orphan_file_deletion"
-
-  configuration {
-    role_arn = var.role_arn
-    enabled  = true
-  }
-}
-
-resource "aws_glue_table_optimizer" "snapshot_retention" {
-  count = var.enable_snapshot_retention ? 1 : 0
-
+resource "aws_glue_catalog_table_optimizer" "retention" {
   catalog_id    = var.catalog_id
   database_name = var.database_name
   table_name    = var.table_name
@@ -89,22 +90,34 @@ resource "aws_glue_table_optimizer" "snapshot_retention" {
   configuration {
     role_arn = var.role_arn
     enabled  = true
+
+    retention_configuration {
+      iceberg_configuration {
+        snapshot_retention_period_in_days = var.snapshot_retention_days
+        number_of_snapshots_to_retain     = var.snapshots_to_retain
+        clean_expired_files               = var.clean_expired_files
+      }
+    }
   }
 }
 
-# ─── Outputs ─────────────────────────────────────────────────────
+# 3. Orphan File Deletion - removes unreferenced data files.
 
-output "compaction_enabled" {
-  description = "Whether compaction optimizer was created."
-  value       = var.enable_compaction
-}
+resource "aws_glue_catalog_table_optimizer" "orphan_file_deletion" {
+  catalog_id    = var.catalog_id
+  database_name = var.database_name
+  table_name    = var.table_name
+  type          = "orphan_file_deletion"
 
-output "orphan_deletion_enabled" {
-  description = "Whether orphan file deletion optimizer was created."
-  value       = var.enable_orphan_deletion
-}
+  configuration {
+    role_arn = var.role_arn
+    enabled  = true
 
-output "snapshot_retention_enabled" {
-  description = "Whether snapshot retention optimizer was created."
-  value       = var.enable_snapshot_retention
+    orphan_file_deletion_configuration {
+      iceberg_configuration {
+        orphan_file_retention_period_in_days = var.orphan_file_retention_days
+        location                             = var.s3_location
+      }
+    }
+  }
 }

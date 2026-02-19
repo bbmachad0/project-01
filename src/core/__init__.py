@@ -7,6 +7,6 @@
 #   core.config    - Runtime configuration resolver
 #   core.logging   - Structured logging
 
-from core.spark.session import get_spark  # noqa: F401
 from core.config.settings import get_config  # noqa: F401
 from core.logging.logger import get_logger  # noqa: F401
+from core.spark.session import get_spark  # noqa: F401

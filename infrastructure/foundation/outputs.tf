@@ -45,14 +45,9 @@ output "s3_artifacts_bucket_id" {
 }
 
 # ── IAM ──────────────────────────────────────────────────────────
-
-output "glue_execution_role_arn" {
-  value = module.iam_glue_job.role_arn
-}
-
-output "table_optimizer_role_arn" {
-  value = module.iam_table_optimizer.role_arn
-}
+# Glue execution and Table Optimizer roles are now per-project
+# (see projects/<name>/iam.tf).  Only the StepFunctions role
+# remains domain-wide.
 
 output "sfn_execution_role_arn" {
   value = module.sfn_execution_role.role_arn
