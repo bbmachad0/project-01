@@ -89,7 +89,13 @@ jobs:
       - name: Terraform Init
         if: needs.changes.outputs.infra == 'true'
         working-directory: infrastructure/environments/${{ env.ENV }}
-        run: terraform init -backend-config=backend.conf
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REGION=$(jq -r .aws_region "$GITHUB_WORKSPACE/domain.json")
+          terraform init \
+            -backend-config="bucket=tfstate-${ACCOUNT_ID}-${ENV}" \
+            -backend-config="region=${REGION}" \
+            -backend-config="use_lockfile=true"
 
       - name: Terraform Plan
         if: needs.changes.outputs.infra == 'true'

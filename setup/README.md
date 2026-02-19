@@ -56,35 +56,44 @@ Terraform stores its state in S3. These buckets are **not** created by
 Terraform itself (chicken-and-egg problem) and must be provisioned
 manually **once per environment** before the first `terraform init`.
 
-The bucket name follows the pattern:
+The bucket name **must** follow the convention:
 
 ```
-{tfstate_bucket}-{env}
+tfstate-{AccountId}-{env}
 ```
 
-For example, with `"tfstate_bucket": "f01-tfstate"` in `domain.json`:
+Where `{AccountId}` is the 12-digit AWS account ID and `{env}` is one of
+`dev`, `int`, `prod`.
 
-| Environment | Bucket name |
-|-------------|-------------|
-| dev | `f01-tfstate-dev` |
-| int | `f01-tfstate-int` |
-| prod | `f01-tfstate-prod` |
+| Environment | Bucket name (example) |
+|-------------|-------------------------------|
+| dev | `tfstate-123456789012-dev` |
+| int | `tfstate-123456789012-int` |
+| prod | `tfstate-123456789012-prod` |
 
-Create them via the AWS Console or CLI:
+Both the CI/CD workflows and the local `init-terraform.sh` script resolve
+the account ID automatically via `aws sts get-caller-identity`, so nothing
+is hard-coded in configuration files.
+
+Create them via the AWS Console or CLI (replace `<ACCOUNT_ID>` and
+`<REGION>` with your values):
 
 ```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION="eu-west-1"  # change to your region
+
 for ENV in dev int prod; do
   aws s3api create-bucket \
-    --bucket f01-tfstate-${ENV} \
-    --region eu-west-1 \
-    --create-bucket-configuration LocationConstraint=eu-west-1
+    --bucket "tfstate-${ACCOUNT_ID}-${ENV}" \
+    --region "${REGION}" \
+    --create-bucket-configuration LocationConstraint="${REGION}"
 
   aws s3api put-bucket-versioning \
-    --bucket f01-tfstate-${ENV} \
+    --bucket "tfstate-${ACCOUNT_ID}-${ENV}" \
     --versioning-configuration Status=Enabled
 
   aws s3api put-public-access-block \
-    --bucket f01-tfstate-${ENV} \
+    --bucket "tfstate-${ACCOUNT_ID}-${ENV}" \
     --public-access-block-configuration \
     BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 done
@@ -102,8 +111,7 @@ All domain-specific names derive from a single file at the repository root:
 {
   "domain_name": "finance01",
   "domain_abbr": "f01",
-  "aws_region": "eu-west-1",
-  "tfstate_bucket": "f01-tfstate"
+  "aws_region": "eu-west-1"
 }
 ```
 
@@ -112,10 +120,13 @@ All domain-specific names derive from a single file at the repository root:
 | `domain_name` | Full domain name | `finance01` |
 | `domain_abbr` | Short abbreviation used in resource names | `f01` |
 | `aws_region` | AWS region for all resources | `eu-west-1` |
-| `tfstate_bucket` | **Prefix** of the S3 bucket for Terraform state. The environment suffix (`-dev`, `-int`, `-prod`) is appended automatically. | `f01-tfstate` |
 
 Edit this file **before** running the bootstrap if you are adapting the
 repository for a different domain.
+
+> **Note:** the Terraform state bucket name (`tfstate-{AccountId}-{env}`)
+> is derived automatically from AWS credentials - it is not stored in
+> `domain.json`.
 
 ---
 

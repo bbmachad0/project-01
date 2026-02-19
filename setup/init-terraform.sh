@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# ─── Generate Terraform backend config files from domain.json ────
-# Run this after changing domain.json to regenerate backend.conf
-# for all environments.
+# ─── Generate Terraform backend config files ─────────────────────
+# Reads domain.json for the region and resolves the AWS Account ID
+# from the current credentials to build the backend bucket name.
+#
+# Bucket naming convention:  tfstate-{AccountId}-{env}
 #
 # Usage:  ./setup/init-terraform.sh
+#
+# Pre-requisite: valid AWS credentials (aws sts get-caller-identity).
 
 set -euo pipefail
 
@@ -16,24 +20,26 @@ if [[ ! -f "${DOMAIN_JSON}" ]]; then
     exit 1
 fi
 
-TFSTATE_BUCKET=$(jq -r .tfstate_bucket "$DOMAIN_JSON")
 REGION=$(jq -r .aws_region "$DOMAIN_JSON")
 
-if [[ -z "${TFSTATE_BUCKET}" || "${TFSTATE_BUCKET}" == "null" ]]; then
-    echo "ERROR: 'tfstate_bucket' not set in domain.json" >&2
-    echo "       Add e.g. \"tfstate_bucket\": \"f01-tfstate\" to domain.json" >&2
+# Resolve account ID from current AWS credentials
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null) || true
+if [[ -z "${ACCOUNT_ID}" ]]; then
+    echo "ERROR: could not resolve AWS Account ID." >&2
+    echo "       Make sure you have valid AWS credentials configured." >&2
     exit 1
 fi
 
-echo "Tfstate bucket prefix: ${TFSTATE_BUCKET}"
-echo "AWS region:            ${REGION}"
+echo "AWS Account ID: ${ACCOUNT_ID}"
+echo "AWS region:     ${REGION}"
 echo ""
 
 for ENV in dev int prod; do
-    BUCKET="${TFSTATE_BUCKET}-${ENV}"
+    BUCKET="tfstate-${ACCOUNT_ID}-${ENV}"
     CONF="${PROJECT_ROOT}/infrastructure/environments/${ENV}/backend.conf"
     cat > "${CONF}" <<EOF
-# Auto-generated from domain.json - run setup/init-terraform.sh to regenerate.
+# Auto-generated - run setup/init-terraform.sh to regenerate.
+# Bucket convention: tfstate-{AccountId}-{env}
 bucket         = "${BUCKET}"
 region         = "${REGION}"
 use_lockfile   = true
