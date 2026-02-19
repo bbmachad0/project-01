@@ -12,7 +12,7 @@ class TestGetConfig:
         monkeypatch.delenv("ENV", raising=False)
         monkeypatch.delenv("CONFIG_PATH", raising=False)
         monkeypatch.delenv("AWS_ACCOUNT_ID", raising=False)
-        for key in ("S3_RAW_BUCKET", "S3_CURATED_BUCKET", "S3_WAREHOUSE_BUCKET"):
+        for key in ("S3_RAW_BUCKET", "S3_REFINED_BUCKET", "S3_CURATED_BUCKET"):
             monkeypatch.delenv(f"{_ENV_PREFIX}{key}", raising=False)
 
         cfg = get_config()
@@ -20,7 +20,8 @@ class TestGetConfig:
         assert cfg["env"] == "local"
         # Bucket defaults include account_id if available, or just {abbr}-{purpose}-local
         assert cfg["s3_raw_bucket"].startswith(f"{_ABBR}-raw-")
-        assert cfg["iceberg_warehouse"].startswith("s3://")
+        assert "s3_refined_bucket" in cfg
+        assert "s3_curated_bucket" in cfg
 
     def test_env_variable_overrides_default(self, monkeypatch):
         monkeypatch.setenv("ENV", "prod")

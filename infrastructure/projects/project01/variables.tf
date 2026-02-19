@@ -32,13 +32,13 @@ variable "raw_bucket" {
   type        = string
 }
 
-variable "curated_bucket" {
-  description = "S3 bucket ID for the curated/refined data layer."
+variable "refined_bucket" {
+  description = "S3 bucket ID for the refined data layer."
   type        = string
 }
 
-variable "warehouse_bucket" {
-  description = "S3 bucket ID for the Iceberg warehouse."
+variable "curated_bucket" {
+  description = "S3 bucket ID for the curated data layer."
   type        = string
 }
 

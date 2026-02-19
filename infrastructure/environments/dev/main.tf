@@ -58,8 +58,8 @@ module "projects" {
   region                 = module.foundation.region
   artifacts_bucket       = module.foundation.s3_artifacts_bucket_id
   raw_bucket             = module.foundation.s3_raw_bucket_id
+  refined_bucket         = module.foundation.s3_refined_bucket_id
   curated_bucket         = module.foundation.s3_curated_bucket_id
-  warehouse_bucket       = module.foundation.s3_warehouse_bucket_id
   sfn_execution_role_arn = module.foundation.sfn_execution_role_arn
 
   db_raw_name     = module.foundation.db_raw_name

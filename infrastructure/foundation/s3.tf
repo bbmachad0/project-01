@@ -10,15 +10,15 @@ module "s3_raw" {
   tags        = local.common_tags
 }
 
-module "s3_curated" {
+module "s3_refined" {
   source      = "../modules/s3_bucket"
-  bucket_name = "${var.domain_abbr}-curated-${data.aws_caller_identity.current.account_id}-${var.env}"
+  bucket_name = "${var.domain_abbr}-refined-${data.aws_caller_identity.current.account_id}-${var.env}"
   tags        = local.common_tags
 }
 
-module "s3_warehouse" {
+module "s3_curated" {
   source      = "../modules/s3_bucket"
-  bucket_name = "${var.domain_abbr}-warehouse-${data.aws_caller_identity.current.account_id}-${var.env}"
+  bucket_name = "${var.domain_abbr}-curated-${data.aws_caller_identity.current.account_id}-${var.env}"
   tags        = local.common_tags
 }
 

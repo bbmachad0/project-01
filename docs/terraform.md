@@ -70,7 +70,7 @@ Shared across all projects within the domain:
 
 | Resource | Naming | Notes |
 |----------|--------|-------|
-| S3 buckets | `{abbr}-{purpose}-{account_id}-{env}` | raw, curated, warehouse, artifacts |
+| S3 buckets | `{abbr}-{purpose}-{account_id}-{env}` | raw, refined, curated, artifacts |
 | Glue databases | `{abbr}_{layer}` | raw, refined, curated |
 | IAM base roles | `{abbr}-glue-base-{env}` | Common permissions |
 

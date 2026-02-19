@@ -18,7 +18,7 @@
 #     script_s3_path    = "s3://${var.artifacts_bucket}/jobs/<folder>/job_ingest_events.py"
 #     extra_py_files    = "s3://${var.artifacts_bucket}/wheels/core-latest-py3-none-any.whl"
 #     temp_dir          = "s3://${var.artifacts_bucket}/glue-temp/"
-#     iceberg_warehouse = "s3://${var.warehouse_bucket}/${var.project_slug}/"
+#     iceberg_warehouse = "s3://${var.curated_bucket}/${var.project_slug}/"
 #
 #     worker_type       = "G.1X"
 #     number_of_workers = 2

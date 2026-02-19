@@ -20,20 +20,20 @@ output "s3_raw_bucket_id" {
   value = module.s3_raw.bucket_id
 }
 
+output "s3_refined_bucket_arn" {
+  value = module.s3_refined.bucket_arn
+}
+
+output "s3_refined_bucket_id" {
+  value = module.s3_refined.bucket_id
+}
+
 output "s3_curated_bucket_arn" {
   value = module.s3_curated.bucket_arn
 }
 
 output "s3_curated_bucket_id" {
   value = module.s3_curated.bucket_id
-}
-
-output "s3_warehouse_bucket_arn" {
-  value = module.s3_warehouse.bucket_arn
-}
-
-output "s3_warehouse_bucket_id" {
-  value = module.s3_warehouse.bucket_id
 }
 
 output "s3_artifacts_bucket_arn" {

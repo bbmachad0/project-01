@@ -6,7 +6,7 @@
 #   glue_catalog_table  -> Standard Hive/Parquet table (no optimizers)
 #
 # Iceberg: S3 path is auto-derived from table_name:
-#   s3://{warehouse_bucket}/{project_slug}/{database}/{table_name}
+#   s3://{bucket}/{project_slug}/{database}/{table_name}
 #
 # Example - Iceberg table in the Curated layer:
 #
@@ -17,7 +17,7 @@
 #     database_name      = var.db_curated_name
 #     catalog_id         = var.account_id
 #     project_slug       = var.project_slug
-#     warehouse_bucket   = var.warehouse_bucket
+#     bucket             = var.curated_bucket
 #     optimizer_role_arn = module.iam_table_optimizer.role_arn
 #     description        = "Aggregated daily summaries - Iceberg."
 #

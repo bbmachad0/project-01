@@ -264,8 +264,8 @@ LOG_FORMAT=text
 
 # Bucket overrides (uncomment to customise)
 # ${domain_abbr^^}_S3_RAW_BUCKET=${domain_abbr}-raw-${account_id}-local
+# ${domain_abbr^^}_S3_REFINED_BUCKET=${domain_abbr}-refined-${account_id}-local
 # ${domain_abbr^^}_S3_CURATED_BUCKET=${domain_abbr}-curated-${account_id}-local
-# ${domain_abbr^^}_S3_WAREHOUSE_BUCKET=${domain_abbr}-warehouse-${account_id}-local
 # ${domain_abbr^^}_S3_ARTIFACTS_BUCKET=${domain_abbr}-artifacts-${account_id}-local
 EOF
     else
@@ -283,8 +283,8 @@ LOG_FORMAT=text
 
 # Bucket overrides (uncomment and set account ID)
 # ${domain_abbr^^}_S3_RAW_BUCKET=${domain_abbr}-raw-<account_id>-local
+# ${domain_abbr^^}_S3_REFINED_BUCKET=${domain_abbr}-refined-<account_id>-local
 # ${domain_abbr^^}_S3_CURATED_BUCKET=${domain_abbr}-curated-<account_id>-local
-# ${domain_abbr^^}_S3_WAREHOUSE_BUCKET=${domain_abbr}-warehouse-<account_id>-local
 # ${domain_abbr^^}_S3_ARTIFACTS_BUCKET=${domain_abbr}-artifacts-<account_id>-local
 EOF
     fi

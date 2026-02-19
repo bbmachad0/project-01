@@ -18,13 +18,13 @@ module "db_raw" {
 module "db_refined" {
   source        = "../modules/glue_catalog_database"
   database_name = "${local.db_prefix}_refined"
-  location_uri  = "s3://${module.s3_curated.bucket_id}/"
+  location_uri  = "s3://${module.s3_refined.bucket_id}/"
   description   = "Refined layer - cleansed and conformed data."
 }
 
 module "db_curated" {
   source        = "../modules/glue_catalog_database"
   database_name = "${local.db_prefix}_curated"
-  location_uri  = "s3://${module.s3_warehouse.bucket_id}/iceberg/"
+  location_uri  = "s3://${module.s3_curated.bucket_id}/"
   description   = "Curated layer - business-ready Iceberg tables."
 }

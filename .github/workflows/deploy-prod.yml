@@ -118,26 +118,19 @@ jobs:
 
       # ── Step 2: Upload Artifacts (wheel + scripts to S3) ─────────
       - name: Setup Python
-        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build wheel
-        if: needs.changes.outputs.core == 'true'
+      - name: Build and upload wheel to S3
         run: |
           pip install build
           python -m build --wheel --outdir dist/
-
-      - name: Upload wheel to S3
-        if: needs.changes.outputs.core == 'true'
-        run: |
           WHEEL=$(ls dist/*.whl | head -1)
           aws s3 cp "$WHEEL" \
             "s3://${ABBR}-artifacts-${{ steps.aws.outputs.account_id }}-${ENV}/wheels/core-latest-py3-none-any.whl"
 
       - name: Upload job scripts to S3
-        if: needs.changes.outputs.jobs == 'true'
         run: |
           aws s3 sync src/jobs/ \
             "s3://${ABBR}-artifacts-${{ steps.aws.outputs.account_id }}-${ENV}/jobs/" \

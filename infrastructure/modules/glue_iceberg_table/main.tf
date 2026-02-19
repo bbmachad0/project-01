@@ -5,7 +5,7 @@
 # Plug-and-play: specify `table_name` once and everything else
 # (S3 location, optimizer references) is auto-derived.
 #
-# S3 layout:  s3://{warehouse_bucket}/{project_slug}/{database_name}/{table_name}/
+# S3 layout:  s3://{bucket}/{project_slug}/{database_name}/{table_name}/
 #
 # Resource: aws_glue_catalog_table + 3x aws_glue_catalog_table_optimizer
 
@@ -31,8 +31,8 @@ variable "project_slug" {
   type        = string
 }
 
-variable "warehouse_bucket" {
-  description = "S3 bucket ID for the Iceberg warehouse."
+variable "bucket" {
+  description = "S3 bucket ID for the data layer this table belongs to."
   type        = string
 }
 
@@ -91,7 +91,7 @@ variable "orphan_file_retention_days" {
 
 locals {
   # Single source of truth for the S3 location of this table.
-  s3_location = "s3://${var.warehouse_bucket}/${var.project_slug}/${var.database_name}/${var.table_name}"
+  s3_location = "s3://${var.bucket}/${var.project_slug}/${var.database_name}/${var.table_name}"
 
   # NOTE: Do NOT include "table_type" or "metadata_location" here.
   # These are reserved parameters managed automatically by the Glue API

@@ -9,8 +9,8 @@
 locals {
   s3_data_bucket_arns = [
     "arn:aws:s3:::${var.raw_bucket}",
+    "arn:aws:s3:::${var.refined_bucket}",
     "arn:aws:s3:::${var.curated_bucket}",
-    "arn:aws:s3:::${var.warehouse_bucket}",
   ]
 }
 

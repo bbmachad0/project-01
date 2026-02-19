@@ -37,7 +37,7 @@ variable "region" {
 }
 
 variable "s3_bucket_arns" {
-  description = "S3 bucket ARNs for data layers (raw, curated, warehouse). Access scoped to project_slug prefix."
+  description = "S3 bucket ARNs for data layers (raw, refined, curated). Access scoped to project_slug prefix."
   type        = list(string)
 }
 

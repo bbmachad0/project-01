@@ -50,8 +50,8 @@ never hardcoded.
 | Layer | S3 Bucket | Glue Database | Table Format |
 |-------|-----------|---------------|--------------|
 | **raw** | `{abbr}-raw-{account_id}-{env}` | `{abbr}_raw` | Standard (Hive) |
-| **refined** | `{abbr}-curated-{account_id}-{env}` | `{abbr}_refined` | Iceberg |
-| **curated** | `{abbr}-warehouse-{account_id}-{env}` | `{abbr}_curated` | Iceberg |
+| **refined** | `{abbr}-refined-{account_id}-{env}` | `{abbr}_refined` | Standard / Iceberg |
+| **curated** | `{abbr}-curated-{account_id}-{env}` | `{abbr}_curated` | Iceberg |
 
 An `artifacts` bucket (`{abbr}-artifacts-{account_id}-{env}`) stores wheels
 and job scripts.
@@ -69,7 +69,7 @@ and job scripts.
 | IAM role (Glue) | `{abbr}-glue-{project_slug}-{env}` | `f01-glue-pj01-dev` |
 | IAM role (Optimizer) | `{abbr}-optimizer-{project_slug}-{env}` | `f01-optimizer-pj01-dev` |
 | S3 data prefix | `{bucket}/{project_slug}/...` | `f01-raw-390403879405-dev/pj01/...` |
-| Iceberg warehouse | `s3://{bucket}/{project_slug}/iceberg/` | |
+| Iceberg table path | `s3://{bucket}/{project_slug}/{db}/{table}` | |
 
 Each project declares a **`project_slug`** (short, unique abbreviation) used
 in all resource names to avoid collisions.
@@ -81,7 +81,7 @@ IAM roles are created **per project**, not per domain.  Each project's
 scoped to:
 
 - **S3**: object access restricted to `{bucket}/{project_slug}/*` on data
-  buckets (raw, curated, warehouse).  The artifacts bucket gets read-only
+  buckets (raw, refined, curated).  The artifacts bucket gets read-only
   access plus temp-dir write.
 - **Glue Catalog**: domain-wide (`{domain_abbr}_*` databases) because
   databases are shared across projects within the domain.

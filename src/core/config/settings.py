@@ -84,10 +84,9 @@ def _bucket_name(purpose: str) -> str:
 _DEFAULTS: dict[str, str] = {
     "env": "local",
     "s3_raw_bucket": _bucket_name("raw"),
+    "s3_refined_bucket": _bucket_name("refined"),
     "s3_curated_bucket": _bucket_name("curated"),
-    "s3_warehouse_bucket": _bucket_name("warehouse"),
     "s3_artifacts_bucket": _bucket_name("artifacts"),
-    "iceberg_warehouse": f"s3://{_bucket_name('warehouse')}/iceberg/",
     "iceberg_database_raw": f"{_ABBR.replace('-', '_')}_raw",
     "iceberg_database_refined": f"{_ABBR.replace('-', '_')}_refined",
     "iceberg_database_curated": f"{_ABBR.replace('-', '_')}_curated",
@@ -160,16 +159,12 @@ def get_config(
     if acct and env != "local":
         for purpose, key in [
             ("raw", "s3_raw_bucket"),
+            ("refined", "s3_refined_bucket"),
             ("curated", "s3_curated_bucket"),
-            ("warehouse", "s3_warehouse_bucket"),
             ("artifacts", "s3_artifacts_bucket"),
         ]:
             # Only override if the user hasn't explicitly set a value
             if key not in overrides and not os.getenv(f"{_ENV_PREFIX}{key.upper()}"):
                 cfg[key] = f"{_ABBR}-{purpose}-{acct}-{env}"
-        if "iceberg_warehouse" not in overrides and not os.getenv(
-            f"{_ENV_PREFIX}ICEBERG_WAREHOUSE"
-        ):
-            cfg["iceberg_warehouse"] = f"s3://{cfg['s3_warehouse_bucket']}/iceberg/"
 
     return cfg

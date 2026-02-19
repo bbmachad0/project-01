@@ -43,7 +43,7 @@ variable "temp_dir" {
 }
 
 variable "iceberg_warehouse" {
-  description = "S3 URI for the Iceberg warehouse location (e.g. s3://bucket/iceberg/)."
+  description = "S3 URI for the default Iceberg catalog warehouse path (e.g. s3://curated-bucket/project_slug/)."
   type        = string
 }
 

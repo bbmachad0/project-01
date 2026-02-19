@@ -102,7 +102,7 @@ def _build_glue_session() -> SparkSession:
 
 def get_spark(
     app_name: str = f"{_ABBR}-glue-job",
-    warehouse_path: str = f"s3://{_bucket_name('warehouse')}/iceberg/",
+    warehouse_path: str = f"s3://{_bucket_name('curated')}/",
     glue_catalog_id: str | None = None,
 ) -> SparkSession:
     """Return an environment-appropriate SparkSession.

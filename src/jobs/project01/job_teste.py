@@ -19,9 +19,7 @@ def main() -> None:
     # ── Load ─────────────────────────────────────
     write_iceberg(
         df=result,
-        path=f"s3://{cfg['s3_curated_bucket']}/iceberg/teste",
-        catalog_db=cfg["curated_db"],
-        table="teste",
+        table=f"glue_catalog.{cfg['iceberg_database_curated']}.teste",
         mode="append",
     )
 

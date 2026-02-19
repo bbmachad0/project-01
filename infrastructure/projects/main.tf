@@ -21,8 +21,8 @@ locals {
     region                 = var.region
     artifacts_bucket       = var.artifacts_bucket
     raw_bucket             = var.raw_bucket
+    refined_bucket         = var.refined_bucket
     curated_bucket         = var.curated_bucket
-    warehouse_bucket       = var.warehouse_bucket
     sfn_execution_role_arn = var.sfn_execution_role_arn
     db_raw_name            = var.db_raw_name
     db_refined_name        = var.db_refined_name
@@ -43,8 +43,8 @@ module "project01" {
   region                 = local.shared.region
   artifacts_bucket       = local.shared.artifacts_bucket
   raw_bucket             = local.shared.raw_bucket
+  refined_bucket         = local.shared.refined_bucket
   curated_bucket         = local.shared.curated_bucket
-  warehouse_bucket       = local.shared.warehouse_bucket
   sfn_execution_role_arn = local.shared.sfn_execution_role_arn
   db_raw_name            = local.shared.db_raw_name
   db_refined_name        = local.shared.db_refined_name
