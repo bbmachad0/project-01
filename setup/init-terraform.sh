@@ -3,7 +3,7 @@
 # Reads domain.json for the region and resolves the AWS Account ID
 # from the current credentials to build the backend bucket name.
 #
-# Bucket naming convention:  tfstate-{AccountId}-{env}
+# Bucket naming convention:  tfstate-{AccountId}
 #
 # Usage:  ./setup/init-terraform.sh
 #
@@ -35,11 +35,11 @@ echo "AWS region:     ${REGION}"
 echo ""
 
 for ENV in dev int prod; do
-    BUCKET="tfstate-${ACCOUNT_ID}-${ENV}"
+    BUCKET="tfstate-${ACCOUNT_ID}"
     CONF="${PROJECT_ROOT}/infrastructure/environments/${ENV}/backend.conf"
     cat > "${CONF}" <<EOF
 # Auto-generated - run setup/init-terraform.sh to regenerate.
-# Bucket convention: tfstate-{AccountId}-{env}
+# Bucket convention: tfstate-{AccountId}
 bucket         = "${BUCKET}"
 region         = "${REGION}"
 use_lockfile   = true

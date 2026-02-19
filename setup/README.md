@@ -59,17 +59,18 @@ manually **once per environment** before the first `terraform init`.
 The bucket name **must** follow the convention:
 
 ```
-tfstate-{AccountId}-{env}
+tfstate-{AccountId}
 ```
 
-Where `{AccountId}` is the 12-digit AWS account ID and `{env}` is one of
-`dev`, `int`, `prod`.
+Where `{AccountId}` is the 12-digit AWS account ID of the target account.
+Since each AWS account already represents an environment, no environment
+suffix is needed -- one bucket per account.
 
-| Environment | Bucket name (example) |
-|-------------|-------------------------------|
-| dev | `tfstate-123456789012-dev` |
-| int | `tfstate-123456789012-int` |
-| prod | `tfstate-123456789012-prod` |
+| Account | Bucket name (example) |
+|---------|-------------------------------|
+| dev | `tfstate-111111111111` |
+| int | `tfstate-222222222222` |
+| prod | `tfstate-333333333333` |
 
 Both the CI/CD workflows and the local `init-terraform.sh` script resolve
 the account ID automatically via `aws sts get-caller-identity`, so nothing
@@ -81,23 +82,24 @@ Create them via the AWS Console or CLI (replace `<ACCOUNT_ID>` and
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REGION="eu-west-1"  # change to your region
+BUCKET="tfstate-${ACCOUNT_ID}"
 
-for ENV in dev int prod; do
-  aws s3api create-bucket \
-    --bucket "tfstate-${ACCOUNT_ID}-${ENV}" \
-    --region "${REGION}" \
-    --create-bucket-configuration LocationConstraint="${REGION}"
+aws s3api create-bucket \
+  --bucket "${BUCKET}" \
+  --region "${REGION}" \
+  --create-bucket-configuration LocationConstraint="${REGION}"
 
-  aws s3api put-bucket-versioning \
-    --bucket "tfstate-${ACCOUNT_ID}-${ENV}" \
-    --versioning-configuration Status=Enabled
+aws s3api put-bucket-versioning \
+  --bucket "${BUCKET}" \
+  --versioning-configuration Status=Enabled
 
-  aws s3api put-public-access-block \
-    --bucket "tfstate-${ACCOUNT_ID}-${ENV}" \
-    --public-access-block-configuration \
-    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-done
+aws s3api put-public-access-block \
+  --bucket "${BUCKET}" \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 ```
+
+Run this **once per AWS account** (dev, int, prod) with the appropriate credentials.
 
 > **Recommended**: enable versioning and block public access (shown above).
 
@@ -124,8 +126,8 @@ All domain-specific names derive from a single file at the repository root:
 Edit this file **before** running the bootstrap if you are adapting the
 repository for a different domain.
 
-> **Note:** the Terraform state bucket name (`tfstate-{AccountId}-{env}`)
-> is derived automatically from AWS credentials - it is not stored in
+> **Note:** the Terraform state bucket name (`tfstate-{AccountId}`) is
+> derived automatically from AWS credentials -- it is not stored in
 > `domain.json`.
 
 ---
