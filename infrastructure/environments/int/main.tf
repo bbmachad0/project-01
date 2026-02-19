@@ -1,4 +1,4 @@
-# ─── Int Environment — Root Module ───────────────────────────────
+# ─── Int Environment - Root Module ───────────────────────────────
 
 locals {
   domain = jsondecode(file("${path.module}/../../../domain.json"))

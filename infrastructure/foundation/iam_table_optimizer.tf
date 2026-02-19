@@ -1,7 +1,7 @@
-# ─── Foundation — IAM: Table Optimizer ───────────────────────────
+# ─── Foundation - IAM: Table Optimizer ───────────────────────────
 # Dedicated role for the Glue Table Optimizer service.
 # Only needs access to curated / warehouse buckets (where Iceberg
-# tables live) — not raw or artifacts.
+# tables live) - not raw or artifacts.
 
 module "iam_table_optimizer" {
   source = "../modules/iam_table_optimizer"

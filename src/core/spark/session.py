@@ -1,4 +1,4 @@
-"""Spark session factory — environment-agnostic entry point.
+"""Spark session factory - environment-agnostic entry point.
 
 Usage in any Glue job or local script::
 
@@ -11,8 +11,8 @@ Catalog extensions) or to reuse the runtime session provided by
 the AWS Glue service.
 
 Supported ``ENV`` values:
-    - ``local``  — standalone PySpark with Iceberg on Glue Catalog
-    - ``dev`` / ``int`` / ``prod`` — AWS Glue managed runtime
+    - ``local``  - standalone PySpark with Iceberg on Glue Catalog
+    - ``dev`` / ``int`` / ``prod`` - AWS Glue managed runtime
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def _build_local_session(
             "spark.sql.extensions",
             "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
         )
-        # Catalog — backed by AWS Glue
+        # Catalog - backed by AWS Glue
         .config("spark.sql.catalog.glue_catalog", "org.apache.iceberg.spark.SparkCatalog")
         .config(
             "spark.sql.catalog.glue_catalog.catalog-impl",

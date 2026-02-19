@@ -1,4 +1,4 @@
-# ─── Prod Environment — Root Module ──────────────────────────────
+# ─── Prod Environment - Root Module ──────────────────────────────
 
 locals {
   domain = jsondecode(file("${path.module}/../../../domain.json"))

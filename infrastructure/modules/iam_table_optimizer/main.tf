@@ -10,7 +10,7 @@
 # ─── Variables ───────────────────────────────────────────────────
 
 variable "project" {
-  description = "Project identifier — used as the IAM security boundary."
+  description = "Project identifier - used as the IAM security boundary."
   type        = string
 }
 

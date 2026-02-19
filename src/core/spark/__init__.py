@@ -1,1 +1,1 @@
-# core.spark — SparkSession management
+# core.spark - SparkSession management

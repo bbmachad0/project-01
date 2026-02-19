@@ -39,7 +39,7 @@ def get_logger(
     Parameters
     ----------
     name:
-        Logger name — typically ``__name__`` of the calling module.
+        Logger name - typically ``__name__`` of the calling module.
     level:
         Explicit level override.  When *None* the level is derived
         from the ``LOG_LEVEL`` environment variable (default ``INFO``).
@@ -49,7 +49,7 @@ def get_logger(
     logger = logging.getLogger(name)
 
     if logger.handlers:
-        # Already configured — avoid duplicate handlers on re-import.
+        # Already configured - avoid duplicate handlers on re-import.
         return logger
 
     resolved_level = level or getattr(

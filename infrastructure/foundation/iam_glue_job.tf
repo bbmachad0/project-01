@@ -1,4 +1,4 @@
-# ─── Foundation — IAM: Glue Job Execution ────────────────────────
+# ─── Foundation - IAM: Glue Job Execution ────────────────────────
 # Domain-scoped execution role shared by all Glue jobs.
 # See modules/iam_glue_job for the full policy breakdown.
 

@@ -1,9 +1,9 @@
 # ─── Deploy to Dev ────────────────────────────────────────────────
 # Triggered on push to the `dev` branch.
 # Uses path filters to skip unnecessary steps.
-# All config read from domain.json — no hardcoded project names.
+# All config read from domain.json - no hardcoded project names.
 
-name: Deploy — Dev
+name: Deploy - Dev
 
 on:
   push:
@@ -66,7 +66,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
-    environment: dev
     env:
       ABBR: ${{ needs.changes.outputs.domain_abbr }}
       ENV: dev

@@ -1,4 +1,4 @@
-# ─── Foundation — VPC ────────────────────────────────────────────
+# ─── Foundation - VPC ────────────────────────────────────────────
 # Dedicated VPC for Glue jobs that require VPC connectivity
 # (e.g., RDS, Redshift, or on-prem data sources via Direct Connect).
 

@@ -1,4 +1,4 @@
-# ─── Foundation — S3 Buckets ─────────────────────────────────────
+# ─── Foundation - S3 Buckets ─────────────────────────────────────
 # Data-lake layer buckets + artifacts bucket for the domain.
 #
 # Naming convention:  {domain_abbr}-{layer}-{env}

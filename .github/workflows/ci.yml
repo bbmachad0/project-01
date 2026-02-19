@@ -1,6 +1,6 @@
-# ─── CI — Continuous Integration ──────────────────────────────────
+# ─── CI - Continuous Integration ──────────────────────────────────
 # Runs on pushes and pull requests, but ONLY when relevant files change.
-# Reads all config from domain.json — no hardcoded project names.
+# Reads all config from domain.json - no hardcoded project names.
 
 name: CI
 

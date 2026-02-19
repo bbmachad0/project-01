@@ -1,6 +1,6 @@
 # ─── Table Optimizers ────────────────────────────────────────────
 # Wire Glue Table Optimizers for each ICEBERG table in this project.
-# Standard (Hive) tables do NOT support optimizers — skip them.
+# Standard (Hive) tables do NOT support optimizers - skip them.
 #
 # Example:
 #

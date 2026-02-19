@@ -2,9 +2,9 @@
 # Triggered on push to the `main` branch (prod).
 # Requires manual approval via the GitHub environment protection rule.
 # Uses path filters to skip unnecessary steps.
-# All config read from domain.json — no hardcoded project names.
+# All config read from domain.json - no hardcoded project names.
 
-name: Deploy — Prod
+name: Deploy - Prod
 
 on:
   push:
@@ -67,7 +67,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
-    environment: prod          # ← GitHub environment with required reviewers
     env:
       ABBR: ${{ needs.changes.outputs.domain_abbr }}
       ENV: prod

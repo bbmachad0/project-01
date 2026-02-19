@@ -1,4 +1,4 @@
-# ─── Foundation — Variables & Locals ─────────────────────────────
+# ─── Foundation - Variables & Locals ─────────────────────────────
 
 variable "domain_name" {
   description = "Full domain name (e.g. niederlassung). Used in tags and descriptions."

@@ -1,11 +1,11 @@
 # ─── Glue Catalog Table Module ───────────────────────────────────
 # Creates a Glue Data Catalog table.  Supports two formats:
 #
-#   iceberg  — Apache Iceberg (open_table_format_input + Iceberg params)
-#   standard — Classic Hive-style external table (SerDe, input/output format)
+#   iceberg  - Apache Iceberg (open_table_format_input + Iceberg params)
+#   standard - Classic Hive-style external table (SerDe, input/output format)
 #
 # For Iceberg tables managed entirely by Spark jobs at runtime, you
-# may omit this module — Spark CREATE TABLE statements also register
+# may omit this module - Spark CREATE TABLE statements also register
 # in the Glue Catalog.  This module is useful when you want Terraform
 # to own the table definition for governance and drift detection.
 
@@ -147,7 +147,7 @@ resource "aws_glue_catalog_table" "this" {
       }
     }
 
-    # Standard tables — SerDe info
+    # Standard tables - SerDe info
     dynamic "ser_de_info" {
       for_each = var.table_format == "standard" && var.serde_library != "" ? [1] : []
       content {

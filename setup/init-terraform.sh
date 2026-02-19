@@ -16,8 +16,8 @@ if [[ ! -f "${DOMAIN_JSON}" ]]; then
     exit 1
 fi
 
-ABBR=$(python3 -c "import json; print(json.load(open('${DOMAIN_JSON}'))['domain_abbr'])")
-REGION=$(python3 -c "import json; print(json.load(open('${DOMAIN_JSON}'))['aws_region'])")
+ABBR=$(jq -r .domain_abbr "$DOMAIN_JSON")
+REGION=$(jq -r .aws_region "$DOMAIN_JSON")
 
 echo "Domain abbreviation: ${ABBR}"
 echo "AWS region:          ${REGION}"
@@ -26,10 +26,10 @@ echo ""
 for ENV in dev int prod; do
     CONF="${PROJECT_ROOT}/infrastructure/environments/${ENV}/backend.conf"
     cat > "${CONF}" <<EOF
-# Auto-generated from domain.json — run setup/init-terraform.sh to regenerate.
+# Auto-generated from domain.json - run setup/init-terraform.sh to regenerate.
 bucket         = "${ABBR}-tfstate-${ENV}"
 region         = "${REGION}"
-dynamodb_table = "${ABBR}-tflock-${ENV}"
+use_lockfile   = true
 EOF
     echo "Generated: infrastructure/environments/${ENV}/backend.conf"
 done

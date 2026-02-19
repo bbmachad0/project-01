@@ -1,112 +1,104 @@
-"""Unit tests for job transformation functions.
+"""Generic auto-discovery tests for Glue job scripts.
 
-These tests exercise *pure PySpark* transformation logic by creating
-a local SparkSession.  No AWS services or Iceberg catalog required.
+Automatically finds every job_*.py under src/jobs/ and validates:
+  - Valid Python syntax (compiles without errors)
+  - Defines a callable main() function
+  - Uses only core.* imports (no awsglue or boto3 at module level)
+  - Has an ``if __name__ == "__main__"`` guard
+
+No manual test creation needed - just add a new job and it is tested.
 """
 
+import ast
+import importlib
+import sys
+from pathlib import Path
+
 import pytest
-from pyspark.sql import SparkSession
-from pyspark.sql import functions as F
-from pyspark.sql.types import (
-    StructType,
-    StructField,
-    StringType,
-    LongType,
-    DoubleType,
-    TimestampType,
-)
 
-from jobs.sales.job_daily_sales import transform_daily_sales
-from jobs.customers.job_customer_delta import deduplicate_events
-from jobs.legacy_refactor.job_step01 import align_schema
+# ── Discovery ────────────────────────────────────────────────────
+
+JOBS_ROOT = Path(__file__).resolve().parent.parent / "src" / "jobs"
+
+FORBIDDEN_IMPORTS = {"awsglue", "boto3", "botocore"}
 
 
-@pytest.fixture(scope="session")
-def spark():
-    """Create a minimal local SparkSession for testing."""
-    session = (
-        SparkSession.builder
-        .master("local[1]")
-        .appName("unit-tests")
-        .config("spark.sql.shuffle.partitions", "1")
-        .config("spark.ui.enabled", "false")
-        .config("spark.driver.bindAddress", "127.0.0.1")
-        .getOrCreate()
-    )
-    yield session
-    session.stop()
+def _discover_jobs():
+    """Yield (project_name, job_path) for every job_*.py under src/jobs/."""
+    if not JOBS_ROOT.exists():
+        return
+    for job_file in sorted(JOBS_ROOT.rglob("job_*.py")):
+        project = job_file.parent.name
+        yield pytest.param(job_file, id=f"{project}/{job_file.name}")
 
 
-# ── Daily sales ──────────────────────────────────────────────────────
+ALL_JOBS = list(_discover_jobs())
 
-class TestTransformDailySales:
-    def test_aggregates_by_date_store_product(self, spark):
-        data = [
-            ("2025-06-01 10:00:00", "S1", "P1", 100.0, 2),
-            ("2025-06-01 11:00:00", "S1", "P1", 50.0, 1),
-            ("2025-06-01 12:00:00", "S1", "P2", 200.0, 3),
-            ("2025-06-02 09:00:00", "S1", "P1", 75.0, 1),
+
+# ── Tests ────────────────────────────────────────────────────────
+
+@pytest.mark.skipif(not ALL_JOBS, reason="No job scripts found")
+class TestJobScripts:
+    """Generic validations applied to every discovered job script."""
+
+    @pytest.mark.parametrize("job_path", ALL_JOBS)
+    def test_valid_python_syntax(self, job_path):
+        """Job file must be valid Python."""
+        source = job_path.read_text(encoding="utf-8")
+        compile(source, str(job_path), "exec")
+
+    @pytest.mark.parametrize("job_path", ALL_JOBS)
+    def test_defines_main_function(self, job_path):
+        """Job file must define a callable main()."""
+        tree = ast.parse(job_path.read_text(encoding="utf-8"))
+        func_names = [
+            node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
         ]
-        df = spark.createDataFrame(
-            data, ["event_ts", "store_id", "product_id", "amount", "quantity"]
+        assert "main" in func_names, f"{job_path.name} must define a main() function"
+
+    @pytest.mark.parametrize("job_path", ALL_JOBS)
+    def test_has_name_guard(self, job_path):
+        """Job file must have an ``if __name__ == "__main__"`` block."""
+        source = job_path.read_text(encoding="utf-8")
+        assert '__name__' in source and '__main__' in source, (
+            f"{job_path.name} must have: if __name__ == \"__main__\""
         )
-        result = transform_daily_sales(df)
 
-        rows = {
-            (r.sale_date.isoformat(), r.store_id, r.product_id): r
-            for r in result.collect()
-        }
+    @pytest.mark.parametrize("job_path", ALL_JOBS)
+    def test_no_forbidden_imports(self, job_path):
+        """Job scripts must not import awsglue or boto3 directly."""
+        tree = ast.parse(job_path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".")[0]
+                    assert root not in FORBIDDEN_IMPORTS, (
+                        f"{job_path.name} imports '{alias.name}' - use core.* instead"
+                    )
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                root = node.module.split(".")[0]
+                assert root not in FORBIDDEN_IMPORTS, (
+                    f"{job_path.name} imports from '{node.module}' - use core.* instead"
+                )
 
-        key = ("2025-06-01", "S1", "P1")
-        assert rows[key].total_revenue == 150.0
-        assert rows[key].total_quantity == 3
-        assert rows[key].transaction_count == 2
+    @pytest.mark.parametrize("job_path", ALL_JOBS)
+    def test_uses_core_imports(self, job_path):
+        """Job file should import at least one module from core.*."""
+        tree = ast.parse(job_path.read_text(encoding="utf-8"))
+        has_core = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("core"):
+                has_core = True
+                break
+        assert has_core, f"{job_path.name} should import from core.*"
 
-    def test_single_event_produces_one_row(self, spark):
-        data = [("2025-06-01 08:00:00", "S2", "P5", 42.0, 1)]
-        df = spark.createDataFrame(
-            data, ["event_ts", "store_id", "product_id", "amount", "quantity"]
-        )
-        result = transform_daily_sales(df)
-        assert result.count() == 1
-
-
-# ── Customer delta ───────────────────────────────────────────────────
-
-class TestDeduplicateEvents:
-    def test_keeps_latest_event_per_customer(self, spark):
-        data = [
-            (1, "2025-06-01 10:00:00", "Alice"),
-            (1, "2025-06-02 12:00:00", "Alice Updated"),
-            (2, "2025-06-01 08:00:00", "Bob"),
-        ]
-        df = spark.createDataFrame(data, ["customer_id", "event_ts", "name"])
-        result = deduplicate_events(df)
-        rows = {r.customer_id: r for r in result.collect()}
-
-        assert len(rows) == 2
-        assert rows[1].name == "Alice Updated"
-        assert rows[2].name == "Bob"
-
-
-# ── Legacy refactor schema alignment ────────────────────────────────
-
-class TestAlignSchema:
-    def test_renames_and_casts_columns(self, spark):
-        data = [
-            (1001, 500, "ABC-123", 99.99, "2024-01-15 12:00:00", "EU"),
-            (1002, 501, "DEF-456", 0.0, "2024-01-16 08:00:00", "US"),  # filtered: amount=0
-            (None, 502, "GHI-789", 50.0, "2024-01-17 10:00:00", "APAC"),  # filtered: null id
-        ]
-        df = spark.createDataFrame(
-            data, ["OrderID", "CustID", "ProdCode", "Total", "OrderDate", "Region"]
-        )
-        result = align_schema(df)
-
-        assert result.count() == 1
-        row = result.first()
-        assert row.order_id == 1001
-        assert row.customer_id == 500
-        assert row.product_id == "ABC-123"
-        assert row.amount == 99.99
-        assert row.region == "EU"
+    @pytest.mark.parametrize("job_path", ALL_JOBS)
+    def test_has_docstring(self, job_path):
+        """Job file should have a module-level docstring."""
+        tree = ast.parse(job_path.read_text(encoding="utf-8"))
+        assert (
+            tree.body
+            and isinstance(tree.body[0], ast.Expr)
+            and isinstance(tree.body[0].value, ast.Constant)
+            and isinstance(tree.body[0].value.value, str)
+        ), f"{job_path.name} should have a module-level docstring"

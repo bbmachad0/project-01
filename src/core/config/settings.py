@@ -76,10 +76,10 @@ def get_config(
     """
     cfg: Dict[str, Any] = dict(_DEFAULTS)
 
-    # Layer 1 — config file
+    # Layer 1 - config file
     cfg.update(_load_config_file(config_path))
 
-    # Layer 2 — environment variables
+    # Layer 2 - environment variables
     for key in list(_DEFAULTS):
         env_val = os.getenv(f"{_ENV_PREFIX}{key.upper()}")
         if env_val is not None:
@@ -90,7 +90,7 @@ def get_config(
     if env_override:
         cfg["env"] = env_override.lower()
 
-    # Layer 3 — explicit overrides
+    # Layer 3 - explicit overrides
     cfg.update(overrides)
 
     return cfg

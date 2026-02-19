@@ -1,9 +1,9 @@
 # ─── Deploy to Int ────────────────────────────────────────────────
 # Triggered on push to the `int` branch.
 # Uses path filters to skip unnecessary steps.
-# All config read from domain.json — no hardcoded project names.
+# All config read from domain.json - no hardcoded project names.
 
-name: Deploy — Int
+name: Deploy - Int
 
 on:
   push:
@@ -66,7 +66,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
-    environment: int
     env:
       ABBR: ${{ needs.changes.outputs.domain_abbr }}
       ENV: int

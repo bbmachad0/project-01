@@ -1,1 +1,1 @@
-# core.io — DataFrame readers and writers
+# core.io - DataFrame readers and writers

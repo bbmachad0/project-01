@@ -1,4 +1,4 @@
-"""Generic DataFrame readers — pure PySpark, no Glue dependencies.
+"""Generic DataFrame readers - pure PySpark, no Glue dependencies.
 
 Each reader returns a standard ``pyspark.sql.DataFrame`` and accepts
 only a :class:`SparkSession` plus read-specific parameters.

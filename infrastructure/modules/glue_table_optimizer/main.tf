@@ -2,9 +2,9 @@
 # Provisions the three Iceberg table maintenance optimizers
 # available in AWS Glue:
 #
-#   compaction          — merges small files to improve query performance
-#   orphan_file_deletion — removes unreferenced data files
-#   retention           — expires old Iceberg snapshots
+#   compaction          - merges small files to improve query performance
+#   orphan_file_deletion - removes unreferenced data files
+#   retention           - expires old Iceberg snapshots
 #
 # Each optimizer can be independently enabled / disabled per table.
 

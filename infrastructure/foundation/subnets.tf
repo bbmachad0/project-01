@@ -1,4 +1,4 @@
-# ─── Foundation — Private Subnets ────────────────────────────────
+# ─── Foundation - Private Subnets ────────────────────────────────
 # Glue jobs run inside private subnets for security.
 
 variable "private_subnet_cidrs" {
@@ -29,7 +29,7 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-# S3 VPC Gateway Endpoint — enables Glue to reach S3 without NAT
+# S3 VPC Gateway Endpoint - enables Glue to reach S3 without NAT
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
@@ -42,7 +42,7 @@ resource "aws_vpc_endpoint" "s3" {
   })
 }
 
-# Glue VPC Interface Endpoint — allows Glue to call the service API
+# Glue VPC Interface Endpoint - allows Glue to call the service API
 resource "aws_vpc_endpoint" "glue" {
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.glue"

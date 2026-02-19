@@ -1,1 +1,1 @@
-# core.iceberg — Iceberg table utilities
+# core.iceberg - Iceberg table utilities

@@ -1,4 +1,4 @@
-# ─── Foundation — IAM: Orchestration (Step Functions) ────────────
+# ─── Foundation - IAM: Orchestration (Step Functions) ────────────
 # Role assumed by AWS Step Functions state machines.
 # Scoped to start / monitor Glue jobs prefixed with {domain_abbr}-.
 
@@ -12,7 +12,7 @@ module "sfn_execution_role" {
 
 data "aws_iam_policy_document" "sfn_permissions" {
 
-  # Glue job execution — scoped to domain jobs
+  # Glue job execution - scoped to domain jobs
   statement {
     sid = "GlueJobExecution"
     actions = [
@@ -26,7 +26,7 @@ data "aws_iam_policy_document" "sfn_permissions" {
     ]
   }
 
-  # CloudWatch Logs — Step Functions execution logs
+  # CloudWatch Logs - Step Functions execution logs
   statement {
     sid = "CloudWatchLogs"
     actions = [

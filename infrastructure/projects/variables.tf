@@ -1,4 +1,4 @@
-# ─── Projects Aggregator — Variables ─────────────────────────────
+# ─── Projects Aggregator - Variables ─────────────────────────────
 # Inputs from the environment root → foundation outputs passthrough.
 
 variable "domain_abbr" {
@@ -52,17 +52,17 @@ variable "sfn_execution_role_arn" {
 }
 
 variable "db_raw_name" {
-  description = "Glue Catalog database — raw layer."
+  description = "Glue Catalog database - raw layer."
   type        = string
 }
 
 variable "db_refined_name" {
-  description = "Glue Catalog database — refined layer."
+  description = "Glue Catalog database - refined layer."
   type        = string
 }
 
 variable "db_curated_name" {
-  description = "Glue Catalog database — curated layer."
+  description = "Glue Catalog database - curated layer."
   type        = string
 }
 

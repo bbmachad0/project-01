@@ -102,6 +102,18 @@ clean: ## Remove build artifacts and caches
 terraform-init: ## Initialize Terraform for an environment (ENVIRONMENT=dev|int|prod)
 	cd infrastructure/environments/$(ENVIRONMENT) && $(TF) init -backend-config=backend.conf
 
+.PHONY: terraform-init-dev
+terraform-init-dev: ## Initialize Terraform for Dev
+	cd infrastructure/environments/dev && $(TF) init -backend-config=backend.conf
+
+.PHONY: terraform-init-int
+terraform-init-int: ## Initialize Terraform for Int
+	cd infrastructure/environments/int && $(TF) init -backend-config=backend.conf
+
+.PHONY: terraform-init-prod
+terraform-init-prod: ## Initialize Terraform for Prod
+	cd infrastructure/environments/prod && $(TF) init -backend-config=backend.conf
+
 .PHONY: terraform-plan-dev
 terraform-plan-dev: ## Run Terraform plan for Dev
 	cd infrastructure/environments/dev && $(TF) init -backend-config=backend.conf && $(TF) plan

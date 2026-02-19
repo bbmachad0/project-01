@@ -1,4 +1,4 @@
-"""Generic DataFrame writers — pure PySpark, no Glue dependencies.
+"""Generic DataFrame writers - pure PySpark, no Glue dependencies.
 
 Each writer accepts a standard ``pyspark.sql.DataFrame`` and persists
 it to the requested target.  All Iceberg-specific SQL (MERGE, etc.)
@@ -39,7 +39,7 @@ def write_iceberg(
         Fully-qualified Iceberg table reference
         (e.g. ``glue_catalog.nl_curated.daily_sales``).
     mode:
-        Spark write mode — ``append``, ``overwrite``, or ``error``.
+        Spark write mode - ``append``, ``overwrite``, or ``error``.
     partition_by:
         Optional list of partition columns (Iceberg hidden partitioning
         is preferred; use only when explicit partitioning is required).
@@ -85,7 +85,7 @@ def merge_iceberg(
     target_table:
         Fully-qualified Iceberg table.
     merge_key:
-        Column name used as the join key — must exist in both DataFrames.
+        Column name used as the join key - must exist in both DataFrames.
     temp_view:
         Temporary view name registered for the source DataFrame.
     """

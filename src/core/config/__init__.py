@@ -1,1 +1,1 @@
-# core.config — Runtime configuration
+# core.config - Runtime configuration

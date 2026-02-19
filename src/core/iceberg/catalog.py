@@ -1,4 +1,4 @@
-"""Iceberg table utilities — DDL helpers, maintenance, and metadata ops.
+"""Iceberg table utilities - DDL helpers, maintenance, and metadata ops.
 
 All functions use *pure PySpark SQL* and accept a standard
 ``SparkSession``.  No ``awsglue`` imports.
@@ -100,7 +100,7 @@ def rewrite_data_files(
     table:
         Fully-qualified Iceberg table.
     strategy:
-        Compaction strategy — ``binpack`` or ``sort``.
+        Compaction strategy - ``binpack`` or ``sort``.
     target_file_size_bytes:
         Target output file size.
     """

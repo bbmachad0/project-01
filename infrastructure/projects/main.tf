@@ -32,57 +32,13 @@ locals {
   }
 }
 
-# ─── Project: Sales ──────────────────────────────────────────────
+# ─── Project: Fin01 ──────────────────────────────────────────────
 
-module "sales" {
-  source = "./sales"
-
-  domain_abbr             = local.shared.domain_abbr
-  project_slug            = "sales"
-  env                     = local.shared.env
-  account_id              = local.shared.account_id
-  artifacts_bucket        = local.shared.artifacts_bucket
-  raw_bucket              = local.shared.raw_bucket
-  curated_bucket          = local.shared.curated_bucket
-  warehouse_bucket        = local.shared.warehouse_bucket
-  glue_execution_role_arn = local.shared.glue_execution_role_arn
-  table_optimizer_role_arn = local.shared.table_optimizer_role_arn
-  sfn_execution_role_arn  = local.shared.sfn_execution_role_arn
-  db_raw_name             = local.shared.db_raw_name
-  db_refined_name         = local.shared.db_refined_name
-  db_curated_name         = local.shared.db_curated_name
-  common_tags             = local.shared.common_tags
-}
-
-# ─── Project: Customers ──────────────────────────────────────────
-
-module "customers" {
-  source = "./customers"
+module "fin01" {
+  source = "./fin01"
 
   domain_abbr             = local.shared.domain_abbr
-  project_slug            = "cust"
-  env                     = local.shared.env
-  account_id              = local.shared.account_id
-  artifacts_bucket        = local.shared.artifacts_bucket
-  raw_bucket              = local.shared.raw_bucket
-  curated_bucket          = local.shared.curated_bucket
-  warehouse_bucket        = local.shared.warehouse_bucket
-  glue_execution_role_arn = local.shared.glue_execution_role_arn
-  table_optimizer_role_arn = local.shared.table_optimizer_role_arn
-  sfn_execution_role_arn  = local.shared.sfn_execution_role_arn
-  db_raw_name             = local.shared.db_raw_name
-  db_refined_name         = local.shared.db_refined_name
-  db_curated_name         = local.shared.db_curated_name
-  common_tags             = local.shared.common_tags
-}
-
-# ─── Project: Legacy Refactor ────────────────────────────────────
-
-module "legacy_refactor" {
-  source = "./legacy_refactor"
-
-  domain_abbr             = local.shared.domain_abbr
-  project_slug            = "legacy"
+  project_slug            = "f01"
   env                     = local.shared.env
   account_id              = local.shared.account_id
   artifacts_bucket        = local.shared.artifacts_bucket

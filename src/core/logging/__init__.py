@@ -1,1 +1,1 @@
-# core.logging — Structured logging helpers
+# core.logging - Structured logging helpers
