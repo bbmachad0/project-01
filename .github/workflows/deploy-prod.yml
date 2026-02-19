@@ -87,6 +87,24 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
+      - name: Ensure tfstate bucket
+        if: needs.changes.outputs.infra == 'true'
+        run: |
+          BUCKET="${ABBR}-tfstate-${ENV}"
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            echo "Creating backend bucket: $BUCKET"
+            aws s3api create-bucket --bucket "$BUCKET" \
+              --region "$AWS_REGION" \
+              --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            aws s3api put-bucket-versioning --bucket "$BUCKET" \
+              --versioning-configuration Status=Enabled
+            aws s3api put-public-access-block --bucket "$BUCKET" \
+              --public-access-block-configuration \
+              BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          else
+            echo "Backend bucket already exists: $BUCKET"
+          fi
+
       - name: Terraform Init
         if: needs.changes.outputs.infra == 'true'
         working-directory: infrastructure/environments/${{ env.ENV }}
