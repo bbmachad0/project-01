@@ -36,8 +36,8 @@ locals {
       Parameters = {
         JobName = name
       }
-      Next    = idx < local.job_count - 1 ? "Run_${replace(var.glue_job_names[idx + 1], "-", "_")}" : null
-      End     = idx == local.job_count - 1 ? true : null
+      Next = idx < local.job_count - 1 ? "Run_${replace(var.glue_job_names[idx + 1], "-", "_")}" : null
+      End  = idx == local.job_count - 1 ? true : null
       Retry = [
         {
           ErrorEquals     = ["States.TaskFailed"]

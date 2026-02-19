@@ -29,7 +29,9 @@ from typing import Any
 def _load_domain() -> dict[str, str]:
     """Read domain.json from setup/ directory (best-effort)."""
     candidates = [
-        Path(__file__).resolve().parents[3] / "setup" / "domain.json",  # src/core/config -> repo root/setup
+        Path(__file__).resolve().parents[3]
+        / "setup"
+        / "domain.json",  # src/core/config -> repo root/setup
         Path.cwd() / "setup" / "domain.json",
         # Fallback: legacy location at repo root
         Path(__file__).resolve().parents[3] / "domain.json",

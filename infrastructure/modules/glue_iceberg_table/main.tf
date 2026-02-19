@@ -93,12 +93,17 @@ locals {
   # Single source of truth for the S3 location of this table.
   s3_location = "s3://${var.warehouse_bucket}/${var.project_slug}/${var.database_name}/${var.table_name}"
 
+  # NOTE: Do NOT include "table_type" or "metadata_location" here.
+  # These are reserved parameters managed automatically by the Glue API
+  # when open_table_format_input.iceberg_input is used.
   iceberg_parameters = {
-    "table_type"     = "ICEBERG"
     "classification" = "iceberg"
   }
 
-  final_parameters = merge(local.iceberg_parameters, var.table_parameters)
+  # Strip reserved keys that Glue manages automatically for Iceberg tables.
+  safe_extra = { for k, v in var.table_parameters : k => v if !contains(["table_type", "metadata_location"], k) }
+
+  final_parameters = merge(local.iceberg_parameters, local.safe_extra)
 }
 
 # ─── Iceberg Table ───────────────────────────────────────────────

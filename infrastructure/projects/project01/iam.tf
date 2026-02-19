@@ -25,7 +25,7 @@ module "iam_glue_job" {
   account_id   = var.account_id
   region       = var.region
 
-  s3_bucket_arns         = local.s3_data_bucket_arns
+  s3_bucket_arns          = local.s3_data_bucket_arns
   s3_artifacts_bucket_arn = "arn:aws:s3:::${var.artifacts_bucket}"
 
   tags = var.common_tags

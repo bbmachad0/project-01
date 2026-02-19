@@ -7,17 +7,17 @@
 module "table_curated_teste" {
   source = "../../modules/glue_iceberg_table"
 
-  table_name       = "teste"
-  database_name    = var.db_curated_name
-  catalog_id       = var.account_id
-  project_slug     = var.project_slug
-  warehouse_bucket = var.warehouse_bucket
+  table_name         = "teste"
+  database_name      = var.db_curated_name
+  catalog_id         = var.account_id
+  project_slug       = var.project_slug
+  warehouse_bucket   = var.warehouse_bucket
   optimizer_role_arn = module.iam_table_optimizer.role_arn
-  description      = "Tabela teste - Iceberg."
+  description        = "Tabela teste - Iceberg."
 
   columns = [
-    { name = "id",         type = "string",    comment = "ID" },
-    { name = "value",      type = "string",    comment = "Valor" },
+    { name = "id", type = "string", comment = "ID" },
+    { name = "value", type = "string", comment = "Valor" },
     { name = "created_at", type = "timestamp", comment = "Data de criacao" },
   ]
 }
