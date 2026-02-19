@@ -1,5 +1,6 @@
 {
   "domain_name": "finance01",
   "domain_abbr": "f01",
-  "aws_region": "eu-west-1"
+  "aws_region": "eu-west-1",
+  "tfstate_bucket": "f01-tfstate"
 }

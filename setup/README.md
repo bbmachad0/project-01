@@ -44,12 +44,53 @@ All versions are defined as constants at the top of `bootstrap.sh`.
 
 ---
 
-## Pre-requisite
+## Pre-requisites
 
 - Ubuntu 24.04+ or WSL2 running Ubuntu 24.04+
 - `sudo` access for system package installation
+- **Terraform state S3 buckets** must exist before the first deploy
 
-No other tools need to be pre-installed.
+### Terraform state buckets
+
+Terraform stores its state in S3. These buckets are **not** created by
+Terraform itself (chicken-and-egg problem) and must be provisioned
+manually **once per environment** before the first `terraform init`.
+
+The bucket name follows the pattern:
+
+```
+{tfstate_bucket}-{env}
+```
+
+For example, with `"tfstate_bucket": "f01-tfstate"` in `domain.json`:
+
+| Environment | Bucket name |
+|-------------|-------------|
+| dev | `f01-tfstate-dev` |
+| int | `f01-tfstate-int` |
+| prod | `f01-tfstate-prod` |
+
+Create them via the AWS Console or CLI:
+
+```bash
+for ENV in dev int prod; do
+  aws s3api create-bucket \
+    --bucket f01-tfstate-${ENV} \
+    --region eu-west-1 \
+    --create-bucket-configuration LocationConstraint=eu-west-1
+
+  aws s3api put-bucket-versioning \
+    --bucket f01-tfstate-${ENV} \
+    --versioning-configuration Status=Enabled
+
+  aws s3api put-public-access-block \
+    --bucket f01-tfstate-${ENV} \
+    --public-access-block-configuration \
+    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+done
+```
+
+> **Recommended**: enable versioning and block public access (shown above).
 
 ---
 
@@ -61,9 +102,17 @@ All domain-specific names derive from a single file at the repository root:
 {
   "domain_name": "finance01",
   "domain_abbr": "f01",
-  "aws_region": "eu-west-1"
+  "aws_region": "eu-west-1",
+  "tfstate_bucket": "f01-tfstate"
 }
 ```
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `domain_name` | Full domain name | `finance01` |
+| `domain_abbr` | Short abbreviation used in resource names | `f01` |
+| `aws_region` | AWS region for all resources | `eu-west-1` |
+| `tfstate_bucket` | **Prefix** of the S3 bucket for Terraform state. The environment suffix (`-dev`, `-int`, `-prod`) is appended automatically. | `f01-tfstate` |
 
 Edit this file **before** running the bootstrap if you are adapting the
 repository for a different domain.
