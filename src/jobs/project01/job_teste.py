@@ -1,4 +1,4 @@
-"""project01 - Job teste."""
+"""project01 - Job teste..."""
 
 from core.config.settings import get_config
 from core.io.writers import write_iceberg

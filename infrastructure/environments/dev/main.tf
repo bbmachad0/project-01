@@ -1,6 +1,6 @@
 # ─── Dev Environment - Root Module ───────────────────────────────
 # Reads domain config from the repository-root domain.json file.
-# Backend is configured via partial config (see backend.conf).
+# Backend is configured via partial config (see backend.conf).\
 
 locals {
   domain = jsondecode(file("${path.module}/../../../domain.json"))
