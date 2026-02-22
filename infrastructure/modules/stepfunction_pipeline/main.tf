@@ -30,29 +30,35 @@ locals {
   job_count = length(var.glue_job_names)
 
   states = {
-    for idx, name in var.glue_job_names : "Run_${replace(name, "-", "_")}" => {
-      Type     = "Task"
-      Resource = "arn:aws:states:::glue:startJobRun.sync"
-      Parameters = {
-        JobName = name
-      }
-      Next = idx < local.job_count - 1 ? "Run_${replace(var.glue_job_names[idx + 1], "-", "_")}" : null
-      End  = idx == local.job_count - 1 ? true : null
-      Retry = [
-        {
-          ErrorEquals     = ["States.TaskFailed"]
-          IntervalSeconds = 60
-          MaxAttempts     = 2
-          BackoffRate     = 2.0
+    for idx, name in var.glue_job_names : "Run_${replace(name, "-", "_")}" => merge(
+      {
+        Type     = "Task"
+        Resource = "arn:aws:states:::glue:startJobRun.sync"
+        Parameters = {
+          JobName = name
         }
-      ]
-      Catch = [
-        {
-          ErrorEquals = ["States.ALL"]
-          Next        = "PipelineFailed"
-        }
-      ]
-    }
+        Retry = [
+          {
+            ErrorEquals     = ["States.TaskFailed"]
+            IntervalSeconds = 60
+            MaxAttempts     = 2
+            BackoffRate     = 2.0
+          }
+        ]
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            Next        = "PipelineFailed"
+          }
+        ]
+      },
+      # Only one of Next or End may be present in a state definition.
+      # jsonencode serialises null values as JSON null, which causes
+      # Step Functions schema validation to reject the definition.
+      idx < local.job_count - 1
+      ? { Next = "Run_${replace(var.glue_job_names[idx + 1], "-", "_")}" }
+      : { End = true }
+    )
   }
 
   definition = jsonencode({
