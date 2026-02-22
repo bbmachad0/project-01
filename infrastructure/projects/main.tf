@@ -27,6 +27,7 @@ locals {
     db_raw_name            = var.db_raw_name
     db_refined_name        = var.db_refined_name
     db_curated_name        = var.db_curated_name
+    glue_connection_name   = var.glue_connection_name
     common_tags            = var.common_tags
   }
 }
@@ -49,16 +50,17 @@ module "project01" {
   db_raw_name            = local.shared.db_raw_name
   db_refined_name        = local.shared.db_refined_name
   db_curated_name        = local.shared.db_curated_name
+  glue_connection_name   = local.shared.glue_connection_name
   common_tags            = local.shared.common_tags
 }
 
-# ─── Project: Test02 ──────────────────────────────────────────────
+# ─── Project: Test02 ─────────────────────────────────────────────
 
 module "test02" {
   source = "./test02"
 
   domain_abbr            = local.shared.domain_abbr
-  project_slug           = "t2"          # slug curto e único
+  project_slug           = "t2"
   env                    = local.shared.env
   account_id             = local.shared.account_id
   region                 = local.shared.region
@@ -70,5 +72,6 @@ module "test02" {
   db_raw_name            = local.shared.db_raw_name
   db_refined_name        = local.shared.db_refined_name
   db_curated_name        = local.shared.db_curated_name
+  glue_connection_name   = local.shared.glue_connection_name
   common_tags            = local.shared.common_tags
 }

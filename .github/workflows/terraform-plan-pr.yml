@@ -1,0 +1,164 @@
+# ─── Terraform Plan on Pull Request ──────────────────────────────
+# Runs terraform plan when infra files change and posts the result
+# as a sticky comment on the PR.  Authenticates via OIDC using the
+# role that matches the PR target branch (dev → dev, int → int, main → prod).
+#
+# Requires these GitHub repository secrets:
+#   AWS_ROLE_ARN_DEV, AWS_ROLE_ARN_INT, AWS_ROLE_ARN_PROD
+
+name: Terraform Plan (PR)
+
+on:
+  pull_request:
+    branches: [dev, int, main]
+    paths:
+      - "infrastructure/**"
+      - "setup/domain.json"
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: tf-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_VERSION: "1.14.5"
+
+jobs:
+  plan:
+    name: Plan (${{ github.base_ref }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Derive environment from target branch ─────────────────
+      - name: Set environment
+        id: env
+        run: |
+          case "${{ github.base_ref }}" in
+            dev)  echo "name=dev"  >> "$GITHUB_OUTPUT" ;;
+            int)  echo "name=int"  >> "$GITHUB_OUTPUT" ;;
+            main) echo "name=prod" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Read domain config
+        id: domain
+        run: |
+          echo "aws_region=$(jq -r .aws_region setup/domain.json)" >> "$GITHUB_OUTPUT"
+
+      # ── AWS authentication ─────────────────────────────────────
+      # All three role ARNs are surfaced as env vars; the bash step
+      # picks the right one based on the derived environment name.
+      - name: Resolve AWS role ARN
+        id: role
+        env:
+          ROLE_DEV:  ${{ secrets.AWS_ROLE_ARN_DEV }}
+          ROLE_INT:  ${{ secrets.AWS_ROLE_ARN_INT }}
+          ROLE_PROD: ${{ secrets.AWS_ROLE_ARN_PROD }}
+        run: |
+          case "${{ steps.env.outputs.name }}" in
+            dev)  echo "arn=${ROLE_DEV}"  >> "$GITHUB_OUTPUT" ;;
+            int)  echo "arn=${ROLE_INT}"  >> "$GITHUB_OUTPUT" ;;
+            prod) echo "arn=${ROLE_PROD}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          aws-region: ${{ steps.domain.outputs.aws_region }}
+
+      - name: Resolve AWS Account ID
+        id: aws
+        run: |
+          echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+
+      # ── Terraform ─────────────────────────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        working-directory: infrastructure/environments/${{ steps.env.outputs.name }}
+        run: |
+          REGION="${{ steps.domain.outputs.aws_region }}"
+          ACCOUNT_ID="${{ steps.aws.outputs.account_id }}"
+          terraform init \
+            -backend-config="bucket=tfstate-${ACCOUNT_ID}" \
+            -backend-config="region=${REGION}" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: infrastructure/environments/${{ steps.env.outputs.name }}
+        run: |
+          set +e
+          terraform plan -no-color -input=false 2>&1 | head -300 > /tmp/plan.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          set -e
+        continue-on-error: true
+
+      # ── Comment on PR ──────────────────────────────────────────
+      - name: Post plan comment
+        uses: actions/github-script@v7
+        env:
+          ENV_NAME: ${{ steps.env.outputs.name }}
+          PLAN_EXIT: ${{ steps.plan.outputs.exit_code }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const env = process.env.ENV_NAME;
+            const exitCode = process.env.PLAN_EXIT;
+            const status = exitCode === '0' ? '✅' : '❌';
+            const planText = fs.readFileSync('/tmp/plan.txt', 'utf8');
+
+            const body = [
+              `<!-- tf-plan-${env} -->`,
+              `### ${status} Terraform Plan — \`${env}\``,
+              '',
+              `<details><summary>Show plan</summary>`,
+              '',
+              '```hcl',
+              planText,
+              '```',
+              '</details>',
+              '',
+              `*Triggered by @${{ github.actor }} on \`${{ github.head_ref }}\` → \`${{ github.base_ref }}\`*`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const marker = `<!-- tf-plan-${env} -->`;
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if plan failed
+        if: steps.plan.outputs.exit_code != '0'
+        run: exit 1

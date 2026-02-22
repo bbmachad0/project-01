@@ -67,6 +67,11 @@ variable "db_curated_name" {
   type        = string
 }
 
+variable "glue_connection_name" {
+  description = "Name of the domain-level Glue VPC connection (shared by all jobs)."
+  type        = string
+}
+
 variable "common_tags" {
   description = "Tags applied to all resources."
   type        = map(string)

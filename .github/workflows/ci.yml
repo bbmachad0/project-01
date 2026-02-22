@@ -21,6 +21,8 @@ on:
 permissions:
   contents: read
   id-token: write
+  checks: write
+  pull-requests: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -86,7 +88,17 @@ jobs:
 
       - name: Run unit tests
         run: |
+          mkdir -p reports
           pytest tests/ -v --tb=short --junitxml=reports/junit.xml
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Unit Tests
+          path: reports/junit.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Upload test report
         if: always()

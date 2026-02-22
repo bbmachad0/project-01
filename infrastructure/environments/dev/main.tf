@@ -70,6 +70,8 @@ module "projects" {
   db_refined_name = module.foundation.db_refined_name
   db_curated_name = module.foundation.db_curated_name
 
+  glue_connection_name = module.foundation.glue_connection_name
+
   common_tags = {
     domain      = local.domain.domain_name
     domain_abbr = local.domain.domain_abbr

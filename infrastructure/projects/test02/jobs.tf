@@ -14,6 +14,7 @@ module "job_job01" {
   number_of_workers = 2
   timeout_minutes   = 60
   bookmark_enabled  = true
+  connections       = [var.glue_connection_name]
 
   default_arguments = {
     "--ENV" = var.env
@@ -38,6 +39,7 @@ module "job_job02" {
   number_of_workers = 2
   timeout_minutes   = 60
   bookmark_enabled  = false
+  connections       = [var.glue_connection_name]
 
   default_arguments = {
     "--ENV" = var.env

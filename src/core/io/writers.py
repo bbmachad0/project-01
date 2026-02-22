@@ -70,9 +70,11 @@ def merge_iceberg(
     source_df: DataFrame,
     target_table: str,
     merge_key: str,
-    temp_view: str = "_src_merge_view",
 ) -> None:
     """Execute an Iceberg MERGE INTO from *source_df* into *target_table*.
+
+    A unique temporary view name is generated per call to avoid collisions
+    when multiple MERGE operations run concurrently in the same SparkSession.
 
     Parameters
     ----------
@@ -84,9 +86,10 @@ def merge_iceberg(
         Fully-qualified Iceberg table.
     merge_key:
         Column name used as the join key - must exist in both DataFrames.
-    temp_view:
-        Temporary view name registered for the source DataFrame.
     """
+    import uuid
+
+    temp_view = f"_merge_src_{uuid.uuid4().hex}"
     source_df.createOrReplaceTempView(temp_view)
 
     columns = source_df.columns

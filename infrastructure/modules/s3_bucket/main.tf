@@ -37,6 +37,12 @@ resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
   tags          = var.tags
+
+  lifecycle {
+    # Prevents accidental data loss on bucket renames or module removal.
+    # To intentionally destroy a bucket, remove this block temporarily.
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_versioning" "this" {

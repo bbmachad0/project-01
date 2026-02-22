@@ -79,10 +79,15 @@ output "region" {
 
 # ── Network ──────────────────────────────────────────────────────
 
-#output "vpc_id" {
-#  value = aws_vpc.main.id
-#}
+output "vpc_id" {
+  value = aws_vpc.main.id
+}
 
-#output "private_subnet_ids" {
-#  value = aws_subnet.private[*].id
-#}
+output "private_subnet_ids" {
+  value = aws_subnet.private[*].id
+}
+
+output "glue_connection_name" {
+  description = "Name of the domain-level Glue VPC connection (shared by all jobs)."
+  value       = aws_glue_connection.main.name
+}
