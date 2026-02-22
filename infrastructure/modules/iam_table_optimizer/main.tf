@@ -132,11 +132,23 @@ resource "aws_iam_role_policy" "table_optimizer" {
   policy = data.aws_iam_policy_document.table_optimizer.json
 }
 
+# IAM is eventually consistent: a newly created role may not be visible to
+# the Glue API immediately, causing CreateTableOptimizer to return
+# AccessDeniedException.  This sleep gives IAM time to propagate globally
+# before any optimizer resource tries to reference this role.
+resource "time_sleep" "iam_propagation" {
+  depends_on      = [aws_iam_role.table_optimizer, aws_iam_role_policy.table_optimizer]
+  create_duration = "20s"
+}
+
 # ─── Outputs ─────────────────────────────────────────────────────
 
 output "role_arn" {
   description = "ARN of the table optimizer IAM role."
-  value       = aws_iam_role.table_optimizer.arn
+  # depends_on ensures consumers (glue_iceberg_table optimizers) wait for
+  # the IAM propagation sleep before calling CreateTableOptimizer.
+  depends_on = [time_sleep.iam_propagation]
+  value      = aws_iam_role.table_optimizer.arn
 }
 
 output "role_name" {
