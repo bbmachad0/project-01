@@ -7,5 +7,5 @@ output "job_job02_name" {
 }
 
 output "pipeline_main_arn" {
-  value = module.pipeline_main.pipeline_arn
+  value = module.pipeline_main.state_machine_arn
 }
