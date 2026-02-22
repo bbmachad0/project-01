@@ -51,3 +51,24 @@ module "project01" {
   db_curated_name        = local.shared.db_curated_name
   common_tags            = local.shared.common_tags
 }
+
+# ─── Project: Test02 ──────────────────────────────────────────────
+
+module "test02" {
+  source = "./test02"
+
+  domain_abbr            = local.shared.domain_abbr
+  project_slug           = "t2"          # slug curto e único
+  env                    = local.shared.env
+  account_id             = local.shared.account_id
+  region                 = local.shared.region
+  artifacts_bucket       = local.shared.artifacts_bucket
+  raw_bucket             = local.shared.raw_bucket
+  refined_bucket         = local.shared.refined_bucket
+  curated_bucket         = local.shared.curated_bucket
+  sfn_execution_role_arn = local.shared.sfn_execution_role_arn
+  db_raw_name            = local.shared.db_raw_name
+  db_refined_name        = local.shared.db_refined_name
+  db_curated_name        = local.shared.db_curated_name
+  common_tags            = local.shared.common_tags
+}

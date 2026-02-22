@@ -1,5 +1,5 @@
 # ─── Data Mesh Domain Makefile ────────────────────────────────────
-# All config read from setup/domain.json — edit that file, not this one.
+# All config read from setup/domain.json - edit that file, not this one.
 
 .DEFAULT_GOAL := help
 SHELL := /bin/bash

@@ -1,6 +1,6 @@
 # AWS Data Mesh Domain
 
-> Production-ready mono-repository template for a single **AWS Data Mesh domain** — batteries included with AWS Glue 5.1, Apache Iceberg, Terraform IaC, and GitHub Actions CI/CD.
+> Production-ready mono-repository template for a single **AWS Data Mesh domain** - batteries included with AWS Glue 5.1, Apache Iceberg, Terraform IaC, and GitHub Actions CI/CD.
 
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
@@ -26,7 +26,7 @@
 ## What It Does
 
 This repository is a **domain unit** inside an AWS Data Mesh. Each domain is
-autonomous — it owns its data contracts, infrastructure, and deployment
+autonomous - it owns its data contracts, infrastructure, and deployment
 pipeline. Within a domain you create **projects**, each project owning its own
 Glue jobs, Iceberg tables, table optimizers, and Step Functions pipelines.
 
@@ -43,7 +43,7 @@ Data flows through three S3 layers:
 
 | Layer | Format | Purpose |
 |-------|--------|---------|
-| **raw** | Standard (Hive) | Landing zone — unmodified source data |
+| **raw** | Standard (Hive) | Landing zone - unmodified source data |
 | **refined** | Iceberg | Cleaned, conformed, joinable |
 | **curated** | Iceberg | Business-ready, aggregated outputs |
 
@@ -51,19 +51,19 @@ Data flows through three S3 layers:
 
 ## Key Features
 
-- **Zero environment literals in job code** — `get_config()` resolves all
+- **Zero environment literals in job code** - `get_config()` resolves all
   bucket names, database names, and environment settings at runtime.
-- **Single source of truth** — `setup/domain.json` drives every name, prefix,
+- **Single source of truth** - `setup/domain.json` drives every name, prefix,
   and convention across Terraform, CI/CD, and Python code.
-- **Per-project IAM isolation** — each project gets a scoped Glue execution
+- **Per-project IAM isolation** - each project gets a scoped Glue execution
   role, preventing cross-project data access.
-- **Smart CI/CD** — path-based change detection avoids rebuilding the wheel or
+- **Smart CI/CD** - path-based change detection avoids rebuilding the wheel or
   re-running Terraform when only unrelated files change.
-- **OIDC authentication** — no static AWS credentials stored in GitHub; all
+- **OIDC authentication** - no static AWS credentials stored in GitHub; all
   deployments assume IAM roles via GitHub's OIDC provider.
-- **Local Spark parity** — Docker image mirrors the Glue 5.1 runtime
+- **Local Spark parity** - Docker image mirrors the Glue 5.1 runtime
   (Python 3.11, Spark 3.5, OpenJDK 17) for local development and testing.
-- **Iceberg-native** — table optimizers (compaction, orphan file cleanup,
+- **Iceberg-native** - table optimizers (compaction, orphan file cleanup,
   snapshot expiry) are provisioned automatically alongside every Iceberg table.
 
 ---
@@ -77,7 +77,7 @@ Data flows through three S3 layers:
 │   ├── bootstrap.sh             # One-time local environment setup (idempotent)
 │   └── init-terraform.sh        # Generate Terraform backend configs from domain.json
 ├── src/
-│   ├── core/                    # Shared Python library — built as .whl, used by all jobs
+│   ├── core/                    # Shared Python library - built as .whl, used by all jobs
 │   │   ├── config/settings.py   # Runtime config resolver (env vars → domain.json)
 │   │   ├── spark/session.py     # SparkSession factory
 │   │   ├── io/                  # Iceberg readers / writers
@@ -88,8 +88,8 @@ Data flows through three S3 layers:
 ├── tests/                       # pytest unit tests for the core library and jobs
 ├── infrastructure/
 │   ├── modules/                 # Reusable Terraform modules (glue_job, glue_iceberg_table, …)
-│   ├── foundation/              # Shared infra — S3 buckets, IAM, Glue databases
-│   ├── projects/                # Per-project stacks — tables, jobs, optimizers, pipelines
+│   ├── foundation/              # Shared infra - S3 buckets, IAM, Glue databases
+│   ├── projects/                # Per-project stacks - tables, jobs, optimizers, pipelines
 │   │   └── _template/           # Copy this to bootstrap a new project
 │   └── environments/
 │       ├── dev/
@@ -111,7 +111,7 @@ Data flows through three S3 layers:
 - Ubuntu 24.04+ or WSL2
 - `sudo` access (for the bootstrap script)
 - AWS CLI configured with credentials for the target account
-- An S3 bucket for Terraform state — see [setup/README.md](setup/README.md)
+- An S3 bucket for Terraform state - see [setup/README.md](setup/README.md)
 
 ### 1. Configure your domain
 
@@ -206,8 +206,8 @@ if __name__ == "__main__":
 ```
 
 Key rules:
-- **No `awsglue` imports** — use `core` abstractions only.
-- **No environment literals** — `get_config()` handles it.
+- **No `awsglue` imports** - use `core` abstractions only.
+- **No environment literals** - `get_config()` handles it.
 - Job scripts live in `src/jobs/<project>/` and are **not** included in the
   wheel; they are uploaded to S3 as standalone `.py` files.
 
@@ -270,8 +270,8 @@ feature/*  ──PR──▶  dev  ──PR──▶  int  ──PR──▶  ma
 | `deploy-int.yml` | Push to `int` | Deploy to Int AWS account |
 | `deploy-prod.yml` | Push to `main` | Deploy to Prod (manual approval gate) |
 
-Deployments use a three-phase order — foundation → artifacts upload →
-full Terraform apply — so S3 buckets always exist before jobs reference them.
+Deployments use a three-phase order - foundation → artifacts upload →
+full Terraform apply - so S3 buckets always exist before jobs reference them.
 
 Authentication uses **GitHub OIDC** (no stored credentials). Each environment
 needs one GitHub secret:
