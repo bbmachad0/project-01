@@ -8,9 +8,9 @@
 
 locals {
   s3_data_bucket_arns = [
-    "arn:aws:s3:::${var.raw_bucket}",
-    "arn:aws:s3:::${var.refined_bucket}",
-    "arn:aws:s3:::${var.curated_bucket}",
+    "arn:aws:s3:::${local.foundation.s3_raw_bucket_id}",
+    "arn:aws:s3:::${local.foundation.s3_refined_bucket_id}",
+    "arn:aws:s3:::${local.foundation.s3_curated_bucket_id}",
   ]
 }
 
@@ -19,16 +19,16 @@ locals {
 module "iam_glue_job" {
   source = "../../modules/iam_glue_job"
 
-  domain_abbr  = var.domain_abbr
-  project_slug = var.project_slug
-  env          = var.env
-  account_id   = var.account_id
-  region       = var.region
+  domain_abbr  = local.foundation.domain_abbr
+  project_slug = local.config.slug
+  env          = var.environment
+  account_id   = data.aws_caller_identity.current.account_id
+  region       = local.domain.aws_region
 
   s3_bucket_arns          = local.s3_data_bucket_arns
-  s3_artifacts_bucket_arn = "arn:aws:s3:::${var.artifacts_bucket}"
+  s3_artifacts_bucket_arn = "arn:aws:s3:::${local.foundation.s3_artifacts_bucket_id}"
 
-  tags = var.common_tags
+  tags = local.tags
 }
 
 # ── Table Optimizer Role ─────────────────────────────────────────
@@ -36,13 +36,13 @@ module "iam_glue_job" {
 module "iam_table_optimizer" {
   source = "../../modules/iam_table_optimizer"
 
-  domain_abbr  = var.domain_abbr
-  project_slug = var.project_slug
-  env          = var.env
-  account_id   = var.account_id
-  region       = var.region
+  domain_abbr  = local.foundation.domain_abbr
+  project_slug = local.config.slug
+  env          = var.environment
+  account_id   = data.aws_caller_identity.current.account_id
+  region       = local.domain.aws_region
 
   s3_bucket_arns = local.s3_data_bucket_arns
 
-  tags = var.common_tags
+  tags = local.tags
 }

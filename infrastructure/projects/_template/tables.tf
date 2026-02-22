@@ -14,10 +14,10 @@
 #     source = "../../modules/glue_iceberg_table"
 #
 #     table_name         = "daily_summary"
-#     database_name      = var.db_curated_name
-#     catalog_id         = var.account_id
-#     project_slug       = var.project_slug
-#     bucket             = var.curated_bucket
+#     database_name      = local.foundation.db_curated_name
+#     catalog_id         = data.aws_caller_identity.current.account_id
+#     project_slug       = local.config.slug
+#     bucket             = local.foundation.s3_curated_bucket_id
 #     optimizer_role_arn = module.iam_table_optimizer.role_arn
 #     description        = "Aggregated daily summaries - Iceberg."
 #
@@ -34,9 +34,9 @@
 #     source = "../../modules/glue_catalog_table"
 #
 #     table_name    = "raw_events"
-#     database_name = var.db_raw_name
-#     catalog_id    = var.account_id
-#     s3_location   = "s3://${var.raw_bucket}/${var.project_slug}/raw_events/"
+#     database_name = local.foundation.db_raw_name
+#     catalog_id    = data.aws_caller_identity.current.account_id
+#     s3_location   = "s3://${local.foundation.s3_raw_bucket_id}/${local.config.slug}/raw_events/"
 #     description   = "Raw ingested events - Parquet, as-is from source."
 #
 #     columns = [

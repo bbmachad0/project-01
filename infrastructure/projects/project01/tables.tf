@@ -8,10 +8,10 @@ module "table_curated_teste" {
   source = "../../modules/glue_iceberg_table"
 
   table_name         = "teste"
-  database_name      = var.db_curated_name
-  catalog_id         = var.account_id
-  project_slug       = var.project_slug
-  bucket             = var.curated_bucket
+  database_name      = local.foundation.db_curated_name
+  catalog_id         = data.aws_caller_identity.current.account_id
+  project_slug       = local.config.slug
+  bucket             = local.foundation.s3_curated_bucket_id
   optimizer_role_arn = module.iam_table_optimizer.role_arn
   description        = "Tabela teste - Iceberg."
 

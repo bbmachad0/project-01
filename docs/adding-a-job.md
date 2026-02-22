@@ -72,14 +72,14 @@ Edit `infrastructure/projects/<project>/jobs.tf`:
 module "job_<name>" {
   source = "../../modules/glue_job"
 
-  job_name       = "${var.domain_abbr}-${var.project_slug}-<name>-${var.env}"
-  script_location = "s3://${var.artifacts_bucket}/scripts/jobs/<project>/job_<name>.py"
-  extra_py_files  = "s3://${var.artifacts_bucket}/wheels/core-latest-py3-none-any.whl"
-  role_arn        = module.iam_glue_<project>.role_arn
+  job_name       = "${local.foundation.domain_abbr}-${local.config.slug}-<name>-${var.environment}"
+  script_s3_path = "s3://${local.foundation.s3_artifacts_bucket_id}/jobs/<project>/job_<name>.py"
+  extra_py_files = "s3://${local.foundation.s3_artifacts_bucket_id}/wheels/core-latest-py3-none-any.whl"
+  role_arn       = module.iam_glue_job.role_arn
+  connections    = [local.foundation.glue_connection_name]
 
   default_arguments = {
-    "--ENV"         = var.env
-    "--CONFIG_PATH" = ""
+    "--ENV" = var.environment
   }
 }
 ```

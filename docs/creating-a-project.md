@@ -10,7 +10,15 @@ tables, Glue jobs, optimizers, and pipelines. Each project lives in two places:
 
 ## Step-by-step
 
-### 1. Copy the template
+### 1. Use the make command (recommended)
+
+```bash
+make new-project NAME=<my_project> SLUG=<short_id>
+```
+
+This copies `_template/`, sets `project.json`, and prints next steps.
+
+**Or manually:**
 
 ```bash
 cp -r infrastructure/projects/_template infrastructure/projects/<my_project>
@@ -29,31 +37,25 @@ It appears in every resource name:
 
 | File | Contents |
 |------|----------|
-| `variables.tf` | Already defined by the template |
+| `project.json` | Set `slug` — the only required config |
 | `tables.tf` | Standard tables in RAW, Iceberg tables in refined/curated |
 | `jobs.tf` | One `module "job_*"` per Glue job |
 | `optimizers.tf` | One optimizer per Iceberg table |
 | `pipelines.tf` | StepFunctions pipeline wiring jobs together |
 | `outputs.tf` | Export job names, table ARNs, pipeline ARNs |
 
-### 4. Wire the project into the aggregator
+> Use `local.foundation.*` to access shared resources (buckets, databases, etc.).
+> See `_template/README.md` for the full list of available locals.
 
-Edit `infrastructure/projects/main.tf` and add a module block:
+### 4. Commit and push
 
-```hcl
-module "my_project" {
-  source = "./my_project"
-
-  env           = var.env
-  domain_abbr   = var.domain_abbr
-  domain_name   = var.domain_name
-  project_slug  = "myprj"        # unique short slug
-  artifacts_bucket = var.artifacts_bucket
-  raw_bucket       = var.raw_bucket
-  refined_bucket   = var.refined_bucket
-  curated_bucket   = var.curated_bucket
-}
+```bash
+git add infrastructure/projects/<my_project>/
+git commit -m "feat: add <my_project> project"
+git push origin dev
 ```
+
+CI/CD auto-discovers the new directory. **No changes to any central file needed.**
 
 ### 5. Create the job scripts directory
 

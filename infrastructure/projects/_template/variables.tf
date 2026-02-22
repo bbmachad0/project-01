@@ -1,18 +1,12 @@
 # ─── Project Stack - Variables ───────────────────────────────────
-# These are injected by the projects/ aggregator from foundation outputs.
-# You should NOT need to change this file when creating a new project.
+# Only ONE variable is needed here. Everything else (buckets, databases,
+# IAM ARNs, etc.) is read automatically from the foundation remote state.
+#
+# The project slug lives in project.json (local.config.slug), so you
+# do NOT need to pass it as a Terraform variable.
+# ─────────────────────────────────────────────────────────────────
 
-variable "domain_abbr" {
-  description = "Domain abbreviation for resource naming (e.g. nl)."
-  type        = string
-}
-
-variable "project_slug" {
-  description = "Short unique slug for this project (e.g. sales, cust, legacy)."
-  type        = string
-}
-
-variable "env" {
+variable "environment" {
   description = "Environment (dev, int, prod)."
   type        = string
 }

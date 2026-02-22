@@ -142,6 +142,45 @@ terraform-validate: ## Validate Terraform for all environments
 init-terraform: ## Regenerate all backend.conf files from domain.json
 	@./setup/init-terraform.sh
 
+.PHONY: new-project
+new-project: ## Scaffold a new project  (NAME=<dir_name>  SLUG=<short_id>)
+	@[ -n "$(NAME)" ] || { echo "Usage: make new-project NAME=<name> SLUG=<slug>"; exit 1; }
+	@[ -n "$(SLUG)" ] || { echo "Usage: make new-project NAME=<name> SLUG=<slug>"; exit 1; }
+	@[ ! -d "infrastructure/projects/$(NAME)" ] || \
+		{ echo "ERROR: infrastructure/projects/$(NAME) already exists"; exit 1; }
+	cp -r infrastructure/projects/_template infrastructure/projects/$(NAME)
+	printf '{\n  "slug": "$(SLUG)"\n}\n' > infrastructure/projects/$(NAME)/project.json
+	@echo ""
+	@echo "Created infrastructure/projects/$(NAME)/"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Edit tables.tf    — define Glue Data Catalog tables"
+	@echo "  2. Edit jobs.tf      — define Glue Jobs"
+	@echo "  3. Edit optimizers.tf — wire table optimizers"
+	@echo "  4. Edit pipelines.tf  — compose Step Function pipelines"
+	@echo "  5. Commit and push   — CI/CD picks the new project up automatically"
+
+.PHONY: tf-init-project
+tf-init-project: ## Init Terraform for a single project  (PROJECT=<name> ENVIRONMENT=dev|int|prod)
+	@[ -n "$(PROJECT)" ] || { echo "Usage: make tf-init-project PROJECT=<name> ENVIRONMENT=dev|int|prod"; exit 1; }
+	$(eval SLUG := $(shell jq -r .slug infrastructure/projects/$(PROJECT)/project.json))
+	cd infrastructure/projects/$(PROJECT) && \
+	  $(TF) init \
+	    -backend-config="bucket=tfstate-$(ACCOUNT_ID)" \
+	    -backend-config="key=projects/$(SLUG)/terraform.tfstate" \
+	    -backend-config="region=$(AWS_REGION)" \
+	    -backend-config="use_lockfile=true"
+
+.PHONY: tf-plan-project
+tf-plan-project: tf-init-project ## Plan Terraform for a single project  (PROJECT=<name> ENVIRONMENT=dev|int|prod)
+	cd infrastructure/projects/$(PROJECT) && \
+	  $(TF) plan -var="environment=$(ENVIRONMENT)"
+
+.PHONY: tf-apply-project
+tf-apply-project: tf-init-project ## Apply Terraform for a single project  (PROJECT=<name> ENVIRONMENT=dev|int|prod)
+	cd infrastructure/projects/$(PROJECT) && \
+	  $(TF) apply -var="environment=$(ENVIRONMENT)"
+
 # ─── Upload Artifacts ────────────────────────────────────────────
 
 .PHONY: upload-jobs

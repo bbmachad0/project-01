@@ -1,10 +1,11 @@
 # ─── Terraform Plan on Pull Request ──────────────────────────────
-# Runs terraform plan when infra files change and posts the result
-# as a sticky comment on the PR.  Authenticates via OIDC using the
-# role that matches the PR target branch (dev → dev, int → int, main → prod).
+# Runs terraform plan for foundation + all auto-discovered projects
+# when infra files change, then posts a combined sticky PR comment.
 #
-# Requires these GitHub repository secrets:
-#   AWS_ROLE_ARN_DEV, AWS_ROLE_ARN_INT, AWS_ROLE_ARN_PROD
+# No hardcoded project names — projects discovered automatically from
+# infrastructure/projects/*/project.json.
+#
+# Requires: AWS_ROLE_ARN_DEV, AWS_ROLE_ARN_INT, AWS_ROLE_ARN_PROD
 
 name: Terraform Plan (PR)
 
@@ -33,8 +34,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       # ── Derive environment from target branch ─────────────────
       - name: Set environment
@@ -48,12 +48,9 @@ jobs:
 
       - name: Read domain config
         id: domain
-        run: |
-          echo "aws_region=$(jq -r .aws_region setup/domain.json)" >> "$GITHUB_OUTPUT"
+        run: echo "aws_region=$(jq -r .aws_region setup/domain.json)" >> "$GITHUB_OUTPUT"
 
       # ── AWS authentication ─────────────────────────────────────
-      # All three role ARNs are surfaced as env vars; the bash step
-      # picks the right one based on the derived environment name.
       - name: Resolve AWS role ARN
         id: role
         env:
@@ -75,90 +72,130 @@ jobs:
 
       - name: Resolve AWS Account ID
         id: aws
-        run: |
-          echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
 
-      # ── Terraform ─────────────────────────────────────────────
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      - name: Terraform Init
-        working-directory: infrastructure/environments/${{ steps.env.outputs.name }}
-        run: |
-          REGION="${{ steps.domain.outputs.aws_region }}"
-          ACCOUNT_ID="${{ steps.aws.outputs.account_id }}"
-          terraform init \
-            -backend-config="bucket=tfstate-${ACCOUNT_ID}" \
-            -backend-config="region=${REGION}" \
-            -backend-config="use_lockfile=true"
-
-      - name: Terraform Plan
-        id: plan
-        working-directory: infrastructure/environments/${{ steps.env.outputs.name }}
+      # ── Plan Foundation ────────────────────────────────────────
+      - name: Plan Foundation
+        id: plan-foundation
+        env:
+          ENV:        ${{ steps.env.outputs.name }}
+          ACCOUNT_ID: ${{ steps.aws.outputs.account_id }}
+          REGION:     ${{ steps.domain.outputs.aws_region }}
         run: |
           set +e
-          terraform plan -no-color -input=false 2>&1 | head -300 > /tmp/plan.txt
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          terraform -chdir="infrastructure/environments/${ENV}" init \
+            -backend-config="bucket=tfstate-${ACCOUNT_ID}" \
+            -backend-config="region=${REGION}" \
+            -backend-config="use_lockfile=true" -input=false -no-color > /dev/null 2>&1
+          terraform -chdir="infrastructure/environments/${ENV}" plan \
+            -no-color -input=false 2>&1 | head -200 > /tmp/plan-foundation.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           set -e
         continue-on-error: true
 
-      # ── Comment on PR ──────────────────────────────────────────
+      # ── Discover Projects ──────────────────────────────────────
+      - name: Discover project directories
+        id: discover
+        run: |
+          PROJECTS=$(find infrastructure/projects -maxdepth 2 -name 'project.json' \
+            ! -path '*/_template/*' | sort | xargs -I{} dirname {} | xargs -I{} basename {})
+          echo "projects<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PROJECTS"    >> "$GITHUB_OUTPUT"
+          echo "EOF"          >> "$GITHUB_OUTPUT"
+
+      # ── Plan each project (sequential to allow comment aggregation) ─
+      - name: Plan Projects
+        id: plan-projects
+        env:
+          ENV:        ${{ steps.env.outputs.name }}
+          ACCOUNT_ID: ${{ steps.aws.outputs.account_id }}
+          REGION:     ${{ steps.domain.outputs.aws_region }}
+          PROJECTS:   ${{ steps.discover.outputs.projects }}
+        run: |
+          set +e
+          echo "" > /tmp/plan-projects.txt
+          OVERALL_EXIT=0
+          while IFS= read -r PROJECT; do
+            [[ -z "$PROJECT" ]] && continue
+            SLUG=$(jq -r .slug "infrastructure/projects/${PROJECT}/project.json")
+            echo "=== Project: ${PROJECT} (slug: ${SLUG}) ===" >> /tmp/plan-projects.txt
+            terraform -chdir="infrastructure/projects/${PROJECT}" init \
+              -backend-config="bucket=tfstate-${ACCOUNT_ID}" \
+              -backend-config="key=projects/${SLUG}/terraform.tfstate" \
+              -backend-config="region=${REGION}" \
+              -backend-config="use_lockfile=true" -input=false -no-color > /dev/null 2>&1
+            terraform -chdir="infrastructure/projects/${PROJECT}" plan \
+              -var="environment=${ENV}" -no-color -input=false 2>&1 | head -150 >> /tmp/plan-projects.txt
+            [[ ${PIPESTATUS[0]} -ne 0 ]] && OVERALL_EXIT=1
+            echo "" >> /tmp/plan-projects.txt
+          done <<< "$PROJECTS"
+          echo "exit_code=${OVERALL_EXIT}" >> "$GITHUB_OUTPUT"
+          set -e
+        continue-on-error: true
+
+      # ── Post combined PR comment ───────────────────────────────
       - name: Post plan comment
         uses: actions/github-script@v7
         env:
-          ENV_NAME: ${{ steps.env.outputs.name }}
-          PLAN_EXIT: ${{ steps.plan.outputs.exit_code }}
+          ENV_NAME:          ${{ steps.env.outputs.name }}
+          FOUNDATION_EXIT:   ${{ steps.plan-foundation.outputs.exit_code }}
+          PROJECTS_EXIT:     ${{ steps.plan-projects.outputs.exit_code }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const env = process.env.ENV_NAME;
-            const exitCode = process.env.PLAN_EXIT;
-            const status = exitCode === '0' ? '✅' : '❌';
-            const planText = fs.readFileSync('/tmp/plan.txt', 'utf8');
+            const env         = process.env.ENV_NAME;
+            const fExit       = process.env.FOUNDATION_EXIT;
+            const pExit       = process.env.PROJECTS_EXIT;
+            const overallOk   = fExit === '0' && pExit === '0';
+            const status      = overallOk ? '✅' : '❌';
+            const planFoundation = fs.readFileSync('/tmp/plan-foundation.txt', 'utf8');
+            const planProjects   = fs.readFileSync('/tmp/plan-projects.txt',   'utf8');
 
             const body = [
               `<!-- tf-plan-${env} -->`,
               `### ${status} Terraform Plan — \`${env}\``,
               '',
-              `<details><summary>Show plan</summary>`,
+              `<details><summary>Foundation</summary>`,
               '',
               '```hcl',
-              planText,
+              planFoundation,
               '```',
               '</details>',
               '',
-              `*Triggered by @${{ github.actor }} on \`${{ github.head_ref }}\` → \`${{ github.base_ref }}\`*`,
+              `<details><summary>Projects</summary>`,
+              '',
+              '```',
+              planProjects,
+              '```',
+              '</details>',
+              '',
+              `*@${{ github.actor }} · \`${{ github.head_ref }}\` → \`${{ github.base_ref }}\`*`,
             ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-
-            const marker = `<!-- tf-plan-${env} -->`;
+            const marker   = `<!-- tf-plan-${env} -->`;
             const existing = comments.find(c => c.body && c.body.startsWith(marker));
-
             if (existing) {
               await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: existing.id, body,
               });
             } else {
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.issue.number, body,
               });
             }
 
-      - name: Fail if plan failed
-        if: steps.plan.outputs.exit_code != '0'
+      - name: Fail if any plan failed
+        if: steps.plan-foundation.outputs.exit_code != '0' || steps.plan-projects.outputs.exit_code != '0'
         run: exit 1

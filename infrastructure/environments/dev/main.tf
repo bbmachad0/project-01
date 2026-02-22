@@ -51,31 +51,6 @@ module "foundation" {
   vpc_cidr    = "10.10.0.0/16"
 }
 
-# ─── Projects ────────────────────────────────────────────────────
-
-module "projects" {
-  source      = "../../projects"
-  domain_abbr = local.domain.domain_abbr
-  env         = local.env
-
-  account_id             = module.foundation.account_id
-  region                 = module.foundation.region
-  artifacts_bucket       = module.foundation.s3_artifacts_bucket_id
-  raw_bucket             = module.foundation.s3_raw_bucket_id
-  refined_bucket         = module.foundation.s3_refined_bucket_id
-  curated_bucket         = module.foundation.s3_curated_bucket_id
-  sfn_execution_role_arn = module.foundation.sfn_execution_role_arn
-
-  db_raw_name     = module.foundation.db_raw_name
-  db_refined_name = module.foundation.db_refined_name
-  db_curated_name = module.foundation.db_curated_name
-
-  glue_connection_name = module.foundation.glue_connection_name
-
-  common_tags = {
-    domain      = local.domain.domain_name
-    domain_abbr = local.domain.domain_abbr
-    env         = local.env
-    managed_by  = "terraform"
-  }
-}
+# Projects are now independent Terraform root modules under
+# infrastructure/projects/<name>/ — each has its own remote state.
+# See docs/adding-a-job.md or run: make new-project NAME=<name> SLUG=<id>
