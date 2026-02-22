@@ -116,7 +116,6 @@ resource "aws_glue_catalog_table_optimizer" "orphan_file_deletion" {
     orphan_file_deletion_configuration {
       iceberg_configuration {
         orphan_file_retention_period_in_days = var.orphan_file_retention_days
-        location                             = var.s3_location
       }
     }
   }
