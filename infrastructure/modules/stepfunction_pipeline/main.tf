@@ -13,8 +13,9 @@ variable "role_arn" {
 }
 
 variable "glue_job_names" {
-  description = "Ordered list of Glue job names to execute sequentially."
+  description = "Ordered list of Glue job names. Unused by the generic ASL definition; kept for reference and future use."
   type        = list(string)
+  default     = []
 }
 
 variable "tags" {
@@ -23,64 +24,13 @@ variable "tags" {
   default     = {}
 }
 
-# ─── Locals ──────────────────────────────────────────────────────
-
-locals {
-  # Build a chain of Glue job states dynamically.
-  job_count = length(var.glue_job_names)
-
-  states = {
-    for idx, name in var.glue_job_names : "Run_${replace(name, "-", "_")}" => merge(
-      {
-        Type     = "Task"
-        Resource = "arn:aws:states:::glue:startJobRun.sync"
-        Parameters = {
-          JobName = name
-        }
-        Retry = [
-          {
-            ErrorEquals     = ["States.TaskFailed"]
-            IntervalSeconds = 60
-            MaxAttempts     = 2
-            BackoffRate     = 2.0
-          }
-        ]
-        Catch = [
-          {
-            ErrorEquals = ["States.ALL"]
-            Next        = "PipelineFailed"
-          }
-        ]
-      },
-      # Only one of Next or End may be present in a state definition.
-      # jsonencode serialises null values as JSON null, which causes
-      # Step Functions schema validation to reject the definition.
-      idx < local.job_count - 1
-      ? { Next = "Run_${replace(var.glue_job_names[idx + 1], "-", "_")}" }
-      : { End = true }
-    )
-  }
-
-  definition = jsonencode({
-    Comment = "Pipeline: ${var.pipeline_name}"
-    StartAt = "Run_${replace(var.glue_job_names[0], "-", "_")}"
-    States = merge(local.states, {
-      PipelineFailed = {
-        Type  = "Fail"
-        Error = "PipelineExecutionFailed"
-        Cause = "One or more Glue jobs failed. Check CloudWatch logs."
-      }
-    })
-  })
-}
-
 # ─── Resource ────────────────────────────────────────────────────
 
 resource "aws_sfn_state_machine" "this" {
   name     = var.pipeline_name
   role_arn = var.role_arn
 
-  definition = local.definition
+  definition = file("${path.module}/asl.json")
 
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.this.arn}:*"

@@ -1,0 +1,16 @@
+{
+  "Comment": "Generic pipeline - functional smoke test. Replace states with actual Glue job tasks when ready.",
+  "StartAt": "PipelineStart",
+  "States": {
+    "PipelineStart": {
+      "Type": "Pass",
+      "Comment": "Pipeline entry point.",
+      "Next": "PipelineEnd"
+    },
+    "PipelineEnd": {
+      "Type": "Pass",
+      "Comment": "Pipeline completed successfully.",
+      "End": true
+    }
+  }
+}
