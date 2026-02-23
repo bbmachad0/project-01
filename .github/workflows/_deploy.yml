@@ -146,13 +146,11 @@ jobs:
         run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Terraform
-        if: needs.changes.outputs.foundation_infra == 'true'
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Terraform Init
-        if: needs.changes.outputs.foundation_infra == 'true'
         working-directory: infrastructure/environments/${{ env.ENV }}
         run: |
           terraform init \
@@ -161,7 +159,6 @@ jobs:
             -backend-config="use_lockfile=true"
 
       - name: Terraform Apply - Foundation
-        if: needs.changes.outputs.foundation_infra == 'true'
         working-directory: infrastructure/environments/${{ env.ENV }}
         run: |
           terraform plan -out=tfplan -input=false
