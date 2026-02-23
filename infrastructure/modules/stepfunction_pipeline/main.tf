@@ -41,7 +41,7 @@ locals {
   # Each state is jsonencode'd individually and decoded back via jsondecode
   # to preserve native types (bool for "End", string for "Next").
   # Using merge() would coerce all values to string, producing "End": "true"
-  # instead of "End": true — which fails ASL schema validation.
+  # instead of "End": true- which fails ASL schema validation.
   states = { for i, name in var.glue_job_names :
     "Run_${local.sanitised_names[i]}" => jsondecode(
       i < length(var.glue_job_names) - 1
@@ -62,7 +62,7 @@ locals {
 
   # Build the full ASL definition as a JSON string.
   # Each branch is encoded independently to avoid Terraform's
-  # "inconsistent conditional result types" error — the dynamic
+  # "inconsistent conditional result types" error- the dynamic
   # state keys in local.states differ from the static fallback object.
   definition_json = length(var.glue_job_names) > 0 ? jsonencode({
     Comment = "Auto-generated pipeline for ${var.pipeline_name}"
