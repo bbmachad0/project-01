@@ -37,19 +37,26 @@ locals {
   # Sanitise job names for use as state names (hyphens → underscores)
   sanitised_names = [for name in var.glue_job_names : replace(name, "-", "_")]
 
-  # Build sequential states from job names
+  # Build sequential states from job names.
+  # Each state is jsonencode'd individually and decoded back via jsondecode
+  # to preserve native types (bool for "End", string for "Next").
+  # Using merge() would coerce all values to string, producing "End": "true"
+  # instead of "End": true — which fails ASL schema validation.
   states = { for i, name in var.glue_job_names :
-    "Run_${local.sanitised_names[i]}" => merge(
-      {
-        Type     = "Task"
-        Resource = "arn:aws:states:::glue:startJobRun.sync"
-        Parameters = {
-          JobName = name
-        }
-      },
+    "Run_${local.sanitised_names[i]}" => jsondecode(
       i < length(var.glue_job_names) - 1
-      ? { Next = "Run_${local.sanitised_names[i + 1]}" }
-      : { End = true }
+      ? jsonencode({
+          Type     = "Task"
+          Resource = "arn:aws:states:::glue:startJobRun.sync"
+          Parameters = { JobName = name }
+          Next     = "Run_${local.sanitised_names[i + 1]}"
+        })
+      : jsonencode({
+          Type     = "Task"
+          Resource = "arn:aws:states:::glue:startJobRun.sync"
+          Parameters = { JobName = name }
+          End      = true
+        })
     )
   }
 
