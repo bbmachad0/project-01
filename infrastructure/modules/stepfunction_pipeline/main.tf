@@ -53,15 +53,23 @@ locals {
     )
   }
 
-  full_definition = {
+  # Build the full ASL definition as a JSON string.
+  # Each branch is encoded independently to avoid Terraform's
+  # "inconsistent conditional result types" error — the dynamic
+  # state keys in local.states differ from the static fallback object.
+  definition_json = length(var.glue_job_names) > 0 ? jsonencode({
     Comment = "Auto-generated pipeline for ${var.pipeline_name}"
-    StartAt = length(var.glue_job_names) > 0 ? "Run_${local.sanitised_names[0]}" : "PipelineEnd"
-    States = length(var.glue_job_names) > 0 ? local.states : {
+    StartAt = "Run_${local.sanitised_names[0]}"
+    States  = local.states
+  }) : jsonencode({
+    Comment = "Auto-generated pipeline for ${var.pipeline_name}"
+    StartAt = "PipelineEnd"
+    States = {
       PipelineEnd = {
         Type = "Succeed"
       }
     }
-  }
+  })
 }
 
 # ─── Resource ────────────────────────────────────────────────────
@@ -70,7 +78,7 @@ resource "aws_sfn_state_machine" "this" {
   name     = var.pipeline_name
   role_arn = var.role_arn
 
-  definition = jsonencode(local.full_definition)
+  definition = local.definition_json
 
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.this.arn}:*"
