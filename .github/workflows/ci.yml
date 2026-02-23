@@ -87,13 +87,14 @@ jobs:
           ruff format --check src/ tests/
 
       - name: Run unit tests
+        id: pytest
         run: |
           mkdir -p reports
           pytest tests/ -v --tb=short --junitxml=reports/junit.xml
 
       - name: Publish test results
         uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5  # v1
-        if: always()
+        if: always() && steps.pytest.outcome != 'skipped'
         with:
           name: Unit Tests
           path: reports/junit.xml
@@ -101,7 +102,7 @@ jobs:
           fail-on-error: false
 
       - name: Upload test report
-        if: always()
+        if: always() && steps.pytest.outcome != 'skipped'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: test-results

@@ -79,9 +79,7 @@ class DataQualityChecker:
             self._checks.append(("unique", col))
         return self
 
-    def value_in_set(
-        self, column: str, allowed: Collection[Any]
-    ) -> DataQualityChecker:
+    def value_in_set(self, column: str, allowed: Collection[Any]) -> DataQualityChecker:
         """Assert that all values in *column* are within the *allowed* set."""
         self._checks.append(("value_in_set", (column, set(allowed))))
         return self
@@ -214,6 +212,5 @@ class DataQualityChecker:
         if failed:
             lines = "\n".join(f"  {r}" for r in failed)
             raise DataQualityError(
-                f"Data quality failed for '{self._table_name}' "
-                f"({len(failed)} check(s)):\n{lines}"
+                f"Data quality failed for '{self._table_name}' ({len(failed)} check(s)):\n{lines}"
             )

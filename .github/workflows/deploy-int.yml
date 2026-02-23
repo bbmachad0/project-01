@@ -11,6 +11,10 @@ on:
       - "LICENSE"
       - "docs/**"
 
+permissions:
+  contents: read
+  id-token: write
+
 concurrency:
   group: deploy-int
   cancel-in-progress: false
