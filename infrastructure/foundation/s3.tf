@@ -71,6 +71,7 @@ data "aws_iam_policy_document" "logs_delivery" {
 module "s3_raw" {
   source            = "../modules/s3_bucket"
   bucket_name       = "${var.domain_abbr}-raw-${data.aws_caller_identity.current.account_id}-${var.env}"
+  enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "raw/"
   kms_key_arn       = aws_kms_key.data_lake.arn
@@ -80,6 +81,7 @@ module "s3_raw" {
 module "s3_refined" {
   source            = "../modules/s3_bucket"
   bucket_name       = "${var.domain_abbr}-refined-${data.aws_caller_identity.current.account_id}-${var.env}"
+  enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "refined/"
   kms_key_arn       = aws_kms_key.data_lake.arn
@@ -89,6 +91,7 @@ module "s3_refined" {
 module "s3_curated" {
   source            = "../modules/s3_bucket"
   bucket_name       = "${var.domain_abbr}-curated-${data.aws_caller_identity.current.account_id}-${var.env}"
+  enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "curated/"
   kms_key_arn       = aws_kms_key.data_lake.arn
@@ -98,6 +101,7 @@ module "s3_curated" {
 module "s3_artifacts" {
   source            = "../modules/s3_bucket"
   bucket_name       = "${var.domain_abbr}-artifacts-${data.aws_caller_identity.current.account_id}-${var.env}"
+  enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "artifacts/"
   kms_key_arn       = aws_kms_key.data_lake.arn

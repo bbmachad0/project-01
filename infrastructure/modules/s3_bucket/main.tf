@@ -31,8 +31,14 @@ variable "tags" {
   default     = {}
 }
 
+variable "enable_logging" {
+  description = "Enable S3 server access logging. When true, logging_bucket_id must be set."
+  type        = bool
+  default     = false
+}
+
 variable "logging_bucket_id" {
-  description = "S3 bucket ID for server access logging. Leave empty to disable."
+  description = "S3 bucket ID for server access logging."
   type        = string
   default     = ""
 }
@@ -111,7 +117,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
 # ─── Access Logging ──────────────────────────────────────────────
 
 resource "aws_s3_bucket_logging" "this" {
-  count         = var.logging_bucket_id != "" ? 1 : 0
+  count         = var.enable_logging ? 1 : 0
   bucket        = aws_s3_bucket.this.id
   target_bucket = var.logging_bucket_id
   target_prefix = var.logging_prefix != "" ? var.logging_prefix : "${aws_s3_bucket.this.id}/"
