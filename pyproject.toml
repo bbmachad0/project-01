@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "core"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Data Domain - shared core library for Glue Spark jobs."
 readme = "README.md"
 license = {text = "Proprietary"}
@@ -41,6 +41,9 @@ include = ["core", "core.*"]
 
 [tool.setuptools.package-dir]
 "" = "src"
+
+[tool.setuptools.dynamic]
+version = {attr = "core.__version__"}
 
 # ─── Ruff ────────────────────────────────────────────────────────
 [tool.ruff]

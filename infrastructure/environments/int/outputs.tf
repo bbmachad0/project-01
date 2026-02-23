@@ -1,111 +1,111 @@
-# ─── Foundation - Outputs ────────────────────────────────────────
+# ─── Environment Outputs ─────────────────────────────────────────
+# Re-exports every foundation output so that per-project stacks can
+# read them via terraform_remote_state.  This file is identical
+# across dev / int / prod — do NOT customise it.
+# ─────────────────────────────────────────────────────────────────
 
 # ── Domain ───────────────────────────────────────────────────────
 
 output "domain_name" {
-  value = var.domain_name
+  value = module.foundation.domain_name
 }
 
 output "domain_abbr" {
-  value = var.domain_abbr
+  value = module.foundation.domain_abbr
 }
 
 # ── S3 ───────────────────────────────────────────────────────────
 
 output "s3_raw_bucket_arn" {
-  value = module.s3_raw.bucket_arn
+  value = module.foundation.s3_raw_bucket_arn
 }
 
 output "s3_raw_bucket_id" {
-  value = module.s3_raw.bucket_id
+  value = module.foundation.s3_raw_bucket_id
 }
 
 output "s3_refined_bucket_arn" {
-  value = module.s3_refined.bucket_arn
+  value = module.foundation.s3_refined_bucket_arn
 }
 
 output "s3_refined_bucket_id" {
-  value = module.s3_refined.bucket_id
+  value = module.foundation.s3_refined_bucket_id
 }
 
 output "s3_curated_bucket_arn" {
-  value = module.s3_curated.bucket_arn
+  value = module.foundation.s3_curated_bucket_arn
 }
 
 output "s3_curated_bucket_id" {
-  value = module.s3_curated.bucket_id
+  value = module.foundation.s3_curated_bucket_id
 }
 
 output "s3_artifacts_bucket_arn" {
-  value = module.s3_artifacts.bucket_arn
+  value = module.foundation.s3_artifacts_bucket_arn
 }
 
 output "s3_artifacts_bucket_id" {
-  value = module.s3_artifacts.bucket_id
+  value = module.foundation.s3_artifacts_bucket_id
 }
 
 output "s3_logs_bucket_id" {
-  value = module.s3_logs.bucket_id
+  value = module.foundation.s3_logs_bucket_id
 }
 
 output "s3_logs_bucket_arn" {
-  value = module.s3_logs.bucket_arn
+  value = module.foundation.s3_logs_bucket_arn
 }
 
 # ── IAM ──────────────────────────────────────────────────────────
-# Glue execution and Table Optimizer roles are now per-project
-# (see projects/<name>/iam.tf).  Only the StepFunctions role
-# remains domain-wide.
 
 output "sfn_execution_role_arn" {
-  value = module.sfn_execution_role.role_arn
+  value = module.foundation.sfn_execution_role_arn
 }
 
 # ── KMS ──────────────────────────────────────────────────────────
 
 output "kms_key_arn" {
-  value = aws_kms_key.data_lake.arn
+  value = module.foundation.kms_key_arn
 }
 
 output "kms_key_id" {
-  value = aws_kms_key.data_lake.id
+  value = module.foundation.kms_key_id
 }
 
 # ── Glue Databases ───────────────────────────────────────────────
 
 output "db_raw_name" {
-  value = module.db_raw.database_name
+  value = module.foundation.db_raw_name
 }
 
 output "db_refined_name" {
-  value = module.db_refined.database_name
+  value = module.foundation.db_refined_name
 }
 
 output "db_curated_name" {
-  value = module.db_curated.database_name
+  value = module.foundation.db_curated_name
 }
 
-# ── Account / Region (convenience for downstream modules) ───────
+# ── Account / Region ────────────────────────────────────────────
 
 output "account_id" {
-  value = data.aws_caller_identity.current.account_id
+  value = module.foundation.account_id
 }
 
 output "region" {
-  value = data.aws_region.current.name
+  value = module.foundation.region
 }
 
 # ── Network ──────────────────────────────────────────────────────
 
 output "vpc_id" {
-  value = aws_vpc.main.id
+  value = module.foundation.vpc_id
 }
 
 output "private_subnet_ids" {
-  value = aws_subnet.private[*].id
+  value = module.foundation.private_subnet_ids
 }
 
 output "glue_connection_name" {
-  description = "Name of the domain-level Glue VPC connection (shared by all jobs)."
-  value       = aws_glue_connection.main.name
+  value = module.foundation.glue_connection_name
 }

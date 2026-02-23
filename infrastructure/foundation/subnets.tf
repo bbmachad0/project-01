@@ -67,11 +67,11 @@ resource "aws_security_group" "glue_endpoint" {
   }
 
   egress {
-    description = "Allow all outbound"
+    description = "Allow traffic within VPC"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = merge(local.common_tags, {
@@ -116,11 +116,19 @@ resource "aws_security_group" "glue_job" {
   }
 
   egress {
-    description = "Allow all outbound (S3 + Glue via VPC endpoints)"
+    description = "Glue worker shuffle traffic (self)"
     from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    to_port     = 65535
+    protocol    = "tcp"
+    self        = true
+  }
+
+  egress {
+    description = "HTTPS to VPC endpoints (S3, Glue)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = merge(local.common_tags, {

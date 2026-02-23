@@ -43,10 +43,10 @@ jobs:
       infra: ${{ steps.filter.outputs.infra }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Path filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3
         id: filter
         with:
           filters: |
@@ -68,10 +68,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -92,7 +92,7 @@ jobs:
           pytest tests/ -v --tb=short --junitxml=reports/junit.xml
 
       - name: Publish test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5  # v1
         if: always()
         with:
           name: Unit Tests
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: test-results
           path: reports/junit.xml
@@ -115,10 +115,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -128,7 +128,7 @@ jobs:
           python -m build --wheel --outdir dist/
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: wheel
           path: dist/*.whl
@@ -144,10 +144,10 @@ jobs:
         environment: [dev, int, prod]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
@@ -162,3 +162,32 @@ jobs:
       - name: Terraform Format Check
         working-directory: infrastructure/environments/${{ matrix.environment }}
         run: terraform fmt -check -recursive
+
+  # ── Terraform Validate Projects (only when infra changed) ───────
+  terraform-validate-projects:
+    name: Terraform Validate Projects
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Validate all project stacks
+        run: |
+          PROJECTS=$(find infrastructure/projects -maxdepth 2 -name 'project.json' \
+            ! -path '*/_template/*' | xargs -I{} dirname {})
+          FAILED=0
+          for DIR in $PROJECTS; do
+            echo "──── Validating $(basename $DIR) ────"
+            terraform -chdir="$DIR" init -backend=false -input=false > /dev/null 2>&1
+            if ! terraform -chdir="$DIR" validate; then
+              FAILED=1
+            fi
+          done
+          exit $FAILED

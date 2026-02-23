@@ -27,6 +27,7 @@ module "iam_glue_job" {
 
   s3_bucket_arns          = local.s3_data_bucket_arns
   s3_artifacts_bucket_arn = "arn:aws:s3:::${local.foundation.s3_artifacts_bucket_id}"
+  kms_key_arn             = local.foundation.kms_key_arn
 
   tags = local.tags
 }
@@ -43,6 +44,7 @@ module "iam_table_optimizer" {
   region       = local.domain.aws_region
 
   s3_bucket_arns = local.s3_data_bucket_arns
+  kms_key_arn    = local.foundation.kms_key_arn
 
   tags = local.tags
 }

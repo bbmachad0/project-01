@@ -1,0 +1,265 @@
+# ─── Reusable Deploy Workflow ─────────────────────────────────────
+# Contains all deployment logic. Called by deploy-dev/int/prod wrappers.
+#
+# Projects are auto-discovered from infrastructure/projects/*/project.json.
+# Adding a new project requires no changes here — it is picked up automatically.
+#
+# Selective deployment:
+#   - Foundation or shared modules changed → deploy ALL projects (they may be affected)
+#   - Only project-specific files changed  → deploy ONLY the changed projects
+#   - src/core or src/jobs changed         → deploy ALL projects (new wheel/scripts)
+#
+# Deploy order:
+#   1. Foundation    (S3, IAM, Glue databases, VPC)
+#   2. Artifacts     (wheel + job scripts to S3)
+#   3. Projects      (only affected ones, in parallel)
+
+name: _deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: "Target environment (dev, int, prod)"
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  TERRAFORM_VERSION: "1.14.5"
+  ENV: ${{ inputs.environment }}
+
+jobs:
+  # ── Detect what changed ──────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      core:            ${{ steps.filter.outputs.core }}
+      jobs:            ${{ steps.filter.outputs.jobs }}
+      foundation_infra: ${{ steps.filter.outputs.foundation_infra }}
+      projects_infra:  ${{ steps.filter.outputs.projects_infra }}
+      aws_region:      ${{ steps.domain.outputs.aws_region }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 2   # needed for git diff in discover step
+
+      - name: Read domain.json
+        id: domain
+        run: echo "aws_region=$(jq -r .aws_region setup/domain.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Path filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3
+        id: filter
+        with:
+          filters: |
+            core:
+              - 'src/core/**'
+              - 'pyproject.toml'
+            jobs:
+              - 'src/jobs/**'
+            foundation_infra:
+              - 'infrastructure/foundation/**'
+              - 'infrastructure/environments/**'
+              - 'infrastructure/modules/**'
+              - 'setup/domain.json'
+            projects_infra:
+              - 'infrastructure/projects/**'
+
+  # ── Discover which projects to deploy ────────────────────────────
+  # Logic:
+  #   - src changes (core/jobs)         → ALL projects (new wheel/scripts)
+  #   - foundation/modules/envs changed → ALL projects (shared infra changed)
+  #   - only projects/** changed        → ONLY the projects whose files changed
+  discover:
+    name: Discover Projects
+    needs: changes
+    if: |
+      needs.changes.outputs.core == 'true' ||
+      needs.changes.outputs.jobs == 'true' ||
+      needs.changes.outputs.foundation_infra == 'true' ||
+      needs.changes.outputs.projects_infra == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 2
+
+      - name: Resolve project matrix
+        id: list
+        env:
+          ALL_PROJECTS:    ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true' || needs.changes.outputs.foundation_infra == 'true' }}
+          PROJECTS_CHANGED: ${{ needs.changes.outputs.projects_infra }}
+        run: |
+          # All known projects
+          ALL=$(find infrastructure/projects -maxdepth 2 -name 'project.json' \
+            ! -path '*/_template/*' | sort | xargs -I{} dirname {} | xargs -I{} basename {})
+
+          if [[ "$ALL_PROJECTS" == "true" ]]; then
+            # Deploy everything (shared/src change)
+            echo "Deploying ALL projects (shared change detected)"
+            DEPLOY="$ALL"
+          else
+            # Only deploy projects whose directory changed
+            CHANGED_DIRS=$(git diff --name-only HEAD~1 HEAD | grep '^infrastructure/projects/' \
+              | sed 's|infrastructure/projects/||;s|/.*||' | sort -u | grep -v '^_template$')
+            DEPLOY=$(comm -12 <(echo "$ALL") <(echo "$CHANGED_DIRS"))
+            echo "Deploying CHANGED projects only: ${DEPLOY:-none}"
+          fi
+
+          MATRIX=$(echo "$DEPLOY" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+
+  # ── Deploy Foundation ────────────────────────────────────────────
+  foundation:
+    name: Deploy Foundation
+    needs: changes
+    if: |
+      needs.changes.outputs.core == 'true' ||
+      needs.changes.outputs.jobs == 'true' ||
+      needs.changes.outputs.foundation_infra == 'true' ||
+      needs.changes.outputs.projects_infra == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      account_id: ${{ steps.aws.outputs.account_id }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ needs.changes.outputs.aws_region }}
+
+      - name: Resolve AWS Account ID
+        id: aws
+        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Terraform
+        if: needs.changes.outputs.foundation_infra == 'true'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        if: needs.changes.outputs.foundation_infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
+        run: |
+          terraform init \
+            -backend-config="bucket=tfstate-${{ steps.aws.outputs.account_id }}" \
+            -backend-config="region=${{ needs.changes.outputs.aws_region }}" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform Apply - Foundation
+        if: needs.changes.outputs.foundation_infra == 'true'
+        working-directory: infrastructure/environments/${{ env.ENV }}
+        run: |
+          terraform plan -out=tfplan -input=false
+          terraform apply -auto-approve tfplan
+
+  # ── Upload Artifacts (wheel + scripts) ──────────────────────────
+  artifacts:
+    name: Upload Artifacts
+    needs: [changes, foundation]
+    if: |
+      needs.changes.outputs.core == 'true' ||
+      needs.changes.outputs.jobs == 'true' ||
+      needs.changes.outputs.foundation_infra == 'true' ||
+      needs.changes.outputs.projects_infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ needs.changes.outputs.aws_region }}
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build and upload wheel
+        if: needs.changes.outputs.core == 'true'
+        run: |
+          SHORT_SHA="${GITHUB_SHA::8}"
+          VERSION="1.0.0+${SHORT_SHA}"
+          ABBR=$(jq -r .domain_abbr setup/domain.json)
+          ACCOUNT_ID="${{ needs.foundation.outputs.account_id }}"
+          pip install build
+          # Inject version with commit SHA for traceability
+          sed -i "s/^__version__ = .*/__version__ = \"${VERSION}\"/" src/core/__init__.py
+          python -m build --wheel --outdir dist/
+          WHEEL=$(ls dist/*.whl | head -1)
+          # Upload versioned wheel for auditability and rollback
+          aws s3 cp "$WHEEL" \
+            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/wheels/${WHEEL##*/}"
+          # Upload latest alias for backward compatibility
+          aws s3 cp "$WHEEL" \
+            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/wheels/core-latest-py3-none-any.whl"
+
+      - name: Upload job scripts
+        if: needs.changes.outputs.jobs == 'true'
+        run: |
+          ABBR=$(jq -r .domain_abbr setup/domain.json)
+          ACCOUNT_ID="${{ needs.foundation.outputs.account_id }}"
+          aws s3 sync src/jobs/ \
+            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/jobs/" \
+            --delete --exact-timestamps
+
+  # ── Deploy Projects (selective, parallel) ────────────────────────
+  deploy-projects:
+    name: "Deploy › ${{ matrix.project }}"
+    needs: [changes, foundation, artifacts, discover]
+    if: needs.discover.outputs.matrix != '[]' && needs.discover.outputs.matrix != ''
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.discover.outputs.matrix) }}
+      fail-fast: false   # other projects continue if one fails
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ needs.changes.outputs.aws_region }}
+
+      - name: Read project slug
+        id: project
+        run: |
+          SLUG=$(jq -r .slug infrastructure/projects/${{ matrix.project }}/project.json)
+          echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        working-directory: infrastructure/projects/${{ matrix.project }}
+        run: |
+          terraform init \
+            -backend-config="bucket=tfstate-${{ needs.foundation.outputs.account_id }}" \
+            -backend-config="key=projects/${{ steps.project.outputs.slug }}/terraform.tfstate" \
+            -backend-config="region=${{ needs.changes.outputs.aws_region }}" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform Apply
+        working-directory: infrastructure/projects/${{ matrix.project }}
+        run: |
+          terraform plan -var="environment=${{ env.ENV }}" -out=tfplan -input=false
+          terraform apply -auto-approve tfplan

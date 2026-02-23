@@ -1,6 +1,7 @@
 # ─── Step Functions Pipeline Module ──────────────────────────────
 # Creates an AWS Step Functions state machine that orchestrates
-# one or more Glue jobs in sequence (or parallel).
+# one or more Glue jobs in sequence.  The ASL definition is
+# generated dynamically from the list of Glue job names.
 
 variable "pipeline_name" {
   description = "Name of the Step Functions state machine."
@@ -13,7 +14,7 @@ variable "role_arn" {
 }
 
 variable "glue_job_names" {
-  description = "Ordered list of Glue job names. Unused by the generic ASL definition; kept for reference and future use."
+  description = "Ordered list of Glue job names to execute sequentially."
   type        = list(string)
   default     = []
 }
@@ -24,13 +25,46 @@ variable "tags" {
   default     = {}
 }
 
+# ─── Dynamic ASL Definition ──────────────────────────────────────
+
+locals {
+  # Sanitise job names for use as state names (hyphens → underscores)
+  sanitised_names = [for name in var.glue_job_names : replace(name, "-", "_")]
+
+  # Build sequential states from job names
+  states = { for i, name in var.glue_job_names :
+    "Run_${local.sanitised_names[i]}" => merge(
+      {
+        Type     = "Task"
+        Resource = "arn:aws:states:::glue:startJobRun.sync"
+        Parameters = {
+          JobName = name
+        }
+      },
+      i < length(var.glue_job_names) - 1
+      ? { Next = "Run_${local.sanitised_names[i + 1]}" }
+      : { End = true }
+    )
+  }
+
+  full_definition = {
+    Comment = "Auto-generated pipeline for ${var.pipeline_name}"
+    StartAt = length(var.glue_job_names) > 0 ? "Run_${local.sanitised_names[0]}" : "PipelineEnd"
+    States = length(var.glue_job_names) > 0 ? local.states : {
+      PipelineEnd = {
+        Type = "Succeed"
+      }
+    }
+  }
+}
+
 # ─── Resource ────────────────────────────────────────────────────
 
 resource "aws_sfn_state_machine" "this" {
   name     = var.pipeline_name
   role_arn = var.role_arn
 
-  definition = file("${path.module}/asl.json")
+  definition = jsonencode(local.full_definition)
 
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.this.arn}:*"

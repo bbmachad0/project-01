@@ -56,10 +56,8 @@ docker-build: ## Build the local Spark development Docker image
 docker-run: ## Run a job inside the local Docker container
 	$(DOCKER) run --rm \
 		-e ENV=local \
-		-e AWS_ACCESS_KEY_ID \
-		-e AWS_SECRET_ACCESS_KEY \
-		-e AWS_SESSION_TOKEN \
 		-e AWS_REGION=$(AWS_REGION) \
+		-v $(HOME)/.aws:/root/.aws:ro \
 		-v $(PWD)/src:/app/src \
 		$(DOCKER_IMAGE):$(DOCKER_TAG) \
 		$(PYTHON) src/jobs/$(JOB)

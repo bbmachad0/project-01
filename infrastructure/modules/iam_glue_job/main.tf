@@ -52,6 +52,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "kms_key_arn" {
+  description = "ARN of the KMS CMK used for S3 encryption. If empty, KMS permissions are not added."
+  type        = string
+  default     = ""
+}
+
 # ─── Data Sources ────────────────────────────────────────────────
 
 data "aws_iam_policy_document" "assume_role" {
@@ -231,6 +237,24 @@ data "aws_iam_policy_document" "glue_job" {
     resources = [
       "arn:aws:ec2:${var.region}:${var.account_id}:network-interface/*",
     ]
+  }
+
+  # ── KMS: Data lake encryption key ───────────────────────────
+
+  dynamic "statement" {
+    for_each = var.kms_key_arn != "" ? [1] : []
+    content {
+      sid = "KMSDataLakeAccess"
+      actions = [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:DescribeKey",
+        "kms:ReEncryptFrom",
+        "kms:ReEncryptTo",
+      ]
+      resources = [var.kms_key_arn]
+    }
   }
 }
 

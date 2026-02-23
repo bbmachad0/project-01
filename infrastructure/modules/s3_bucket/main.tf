@@ -31,6 +31,24 @@ variable "tags" {
   default     = {}
 }
 
+variable "logging_bucket_id" {
+  description = "S3 bucket ID for server access logging. Leave empty to disable."
+  type        = string
+  default     = ""
+}
+
+variable "logging_prefix" {
+  description = "Prefix for access log objects within the logging bucket."
+  type        = string
+  default     = ""
+}
+
+variable "kms_key_arn" {
+  description = "ARN of a KMS CMK for S3 encryption. If empty, uses AWS-managed key."
+  type        = string
+  default     = ""
+}
+
 # ─── Resources ───────────────────────────────────────────────────
 
 resource "aws_s3_bucket" "this" {
@@ -56,7 +74,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = var.kms_key_arn != "" ? var.kms_key_arn : null
     }
     bucket_key_enabled = true
   }
@@ -87,6 +106,43 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
       days_after_initiation = 7
     }
   }
+}
+
+# ─── Access Logging ──────────────────────────────────────────────
+
+resource "aws_s3_bucket_logging" "this" {
+  count         = var.logging_bucket_id != "" ? 1 : 0
+  bucket        = aws_s3_bucket.this.id
+  target_bucket = var.logging_bucket_id
+  target_prefix = var.logging_prefix != "" ? var.logging_prefix : "${aws_s3_bucket.this.id}/"
+}
+
+# ─── Bucket Policy: Deny Insecure Transport ─────────────────────
+
+data "aws_iam_policy_document" "deny_insecure" {
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [
+      aws_s3_bucket.this.arn,
+      "${aws_s3_bucket.this.arn}/*",
+    ]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "deny_insecure" {
+  bucket = aws_s3_bucket.this.id
+  policy = data.aws_iam_policy_document.deny_insecure.json
 }
 
 # ─── Outputs ─────────────────────────────────────────────────────
