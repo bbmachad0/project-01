@@ -190,6 +190,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ needs.changes.outputs.aws_region }}
 
+      - name: Resolve AWS Account ID
+        id: aws
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::${ACCOUNT_ID}"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+
       - name: Setup Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
@@ -201,7 +208,7 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::8}"
           VERSION="1.0.0+${SHORT_SHA}"
           ABBR=$(jq -r .domain_abbr setup/domain.json)
-          ACCOUNT_ID="${{ needs.foundation.outputs.account_id }}"
+          ACCOUNT_ID="${{ steps.aws.outputs.account_id }}"
           pip install build
           # Inject version without permanently modifying the working tree.
           # The trap restores __init__.py on exit (success or failure).
@@ -217,7 +224,7 @@ jobs:
         if: needs.changes.outputs.jobs == 'true'
         run: |
           ABBR=$(jq -r .domain_abbr setup/domain.json)
-          ACCOUNT_ID="${{ needs.foundation.outputs.account_id }}"
+          ACCOUNT_ID="${{ steps.aws.outputs.account_id }}"
           aws s3 sync src/jobs/ \
             "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/jobs/" \
             --delete --exact-timestamps

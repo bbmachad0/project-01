@@ -44,7 +44,7 @@ module "table_refined_events" {
 
 # ── CURATED: Iceberg (optimizers incluídos automaticamente) ──
 
-module "table_curated_summary" {
+module "table_curated_summary_events" {
   source = "../../modules/glue_iceberg_table"
 
   table_name         = "summary"
