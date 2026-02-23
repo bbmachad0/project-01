@@ -105,6 +105,10 @@ output "private_subnet_ids" {
   value = aws_subnet.private[*].id
 }
 
+output "private_subnet_arns" {
+  value = aws_subnet.private[*].arn
+}
+
 output "glue_connection_name" {
   description = "Name of the domain-level Glue VPC connection (shared by all jobs)."
   value       = aws_glue_connection.main.name

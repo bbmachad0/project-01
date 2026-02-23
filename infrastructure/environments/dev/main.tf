@@ -36,11 +36,36 @@ provider "aws" {
       domain_abbr = local.domain.domain_abbr
       env         = local.env
       managed_by  = "terraform"
+      git_sha     = var.git_sha
+      deployed_by = var.deployed_by
+      repository  = var.repository
     }
   }
 }
 
-# ─── Foundation Infrastructure ───────────────────────────────────
+# ─── Traceability Variables ──────────────────────────────────────────
+# Set via TF_VAR_* in CI (git_sha, deployed_by, repository).
+# Default to "local" for local development runs.
+
+variable "git_sha" {
+  description = "Git commit SHA injected at deploy time (TF_VAR_git_sha)."
+  type        = string
+  default     = "local"
+}
+
+variable "deployed_by" {
+  description = "CI actor or 'local'. Injected via TF_VAR_deployed_by."
+  type        = string
+  default     = "local"
+}
+
+variable "repository" {
+  description = "Source repository. Injected via TF_VAR_repository."
+  type        = string
+  default     = "local"
+}
+
+# ─── Foundation Infrastructure ─────────────────────────────────────────
 
 module "foundation" {
   source      = "../../foundation"
@@ -52,5 +77,5 @@ module "foundation" {
 }
 
 # Projects are now independent Terraform root modules under
-# infrastructure/projects/<name>/ — each has its own remote state.
+# infrastructure/projects/<name>/ - each has its own remote state.
 # See docs/adding-a-job.md or run: make new-project NAME=<name> SLUG=<id>

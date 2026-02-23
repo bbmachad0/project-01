@@ -55,6 +55,12 @@ variable "kms_key_arn" {
   default     = ""
 }
 
+variable "create_bucket_policy" {
+  description = "Create the module-managed DenyInsecureTransport bucket policy. Set false when the caller manages a combined bucket policy (e.g. S3 access logs bucket requiring additional statements)."
+  type        = bool
+  default     = true
+}
+
 # ─── Resources ───────────────────────────────────────────────────
 
 resource "aws_s3_bucket" "this" {
@@ -147,6 +153,7 @@ data "aws_iam_policy_document" "deny_insecure" {
 }
 
 resource "aws_s3_bucket_policy" "deny_insecure" {
+  count  = var.create_bucket_policy ? 1 : 0
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.deny_insecure.json
 }

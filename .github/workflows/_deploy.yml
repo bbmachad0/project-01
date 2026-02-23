@@ -2,7 +2,7 @@
 # Contains all deployment logic. Called by deploy-dev/int/prod wrappers.
 #
 # Projects are auto-discovered from infrastructure/projects/*/project.json.
-# Adding a new project requires no changes here — it is picked up automatically.
+# Adding a new project requires no changes here - it is picked up automatically.
 #
 # Selective deployment:
 #   - Foundation or shared modules changed → deploy ALL projects (they may be affected)
@@ -35,6 +35,10 @@ env:
   PYTHON_VERSION: "3.11"
   TERRAFORM_VERSION: "1.14.5"
   ENV: ${{ inputs.environment }}
+  # Injected into every Terraform apply as resource tags (for auditability).
+  TF_VAR_git_sha:     ${{ github.sha }}
+  TF_VAR_deployed_by: ${{ github.actor }}
+  TF_VAR_repository:  ${{ github.repository }}
 
 jobs:
   # ── Detect what changed ──────────────────────────────────────────
@@ -143,7 +147,10 @@ jobs:
 
       - name: Resolve AWS Account ID
         id: aws
-        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::${ACCOUNT_ID}"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
@@ -196,16 +203,15 @@ jobs:
           ABBR=$(jq -r .domain_abbr setup/domain.json)
           ACCOUNT_ID="${{ needs.foundation.outputs.account_id }}"
           pip install build
-          # Inject version with commit SHA for traceability
+          # Inject version without permanently modifying the working tree.
+          # The trap restores __init__.py on exit (success or failure).
+          trap 'git checkout -- src/core/__init__.py' EXIT SIGINT SIGTERM
           sed -i "s/^__version__ = .*/__version__ = \"${VERSION}\"/" src/core/__init__.py
           python -m build --wheel --outdir dist/
           WHEEL=$(ls dist/*.whl | head -1)
-          # Upload versioned wheel for auditability and rollback
+          # Upload versioned wheel for auditability and rollback.
           aws s3 cp "$WHEEL" \
             "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/wheels/${WHEEL##*/}"
-          # Upload latest alias for backward compatibility
-          aws s3 cp "$WHEEL" \
-            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/wheels/core-latest-py3-none-any.whl"
 
       - name: Upload job scripts
         if: needs.changes.outputs.jobs == 'true'

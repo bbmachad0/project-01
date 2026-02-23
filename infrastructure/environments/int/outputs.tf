@@ -1,7 +1,7 @@
 # ─── Environment Outputs ─────────────────────────────────────────
 # Re-exports every foundation output so that per-project stacks can
 # read them via terraform_remote_state.  This file is identical
-# across dev / int / prod — do NOT customise it.
+# across dev / int / prod - do NOT customise it.
 # ─────────────────────────────────────────────────────────────────
 
 # ── Domain ───────────────────────────────────────────────────────
@@ -104,6 +104,10 @@ output "vpc_id" {
 
 output "private_subnet_ids" {
   value = module.foundation.private_subnet_ids
+}
+
+output "private_subnet_arns" {
+  value = module.foundation.private_subnet_arns
 }
 
 output "glue_connection_name" {

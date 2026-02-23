@@ -38,7 +38,7 @@ class CheckResult:
     def __str__(self) -> str:
         status = "PASS" if self.passed else "FAIL"
         col_info = f" [{self.column}]" if self.column else ""
-        detail = f" — {self.detail}" if self.detail else ""
+        detail = f" - {self.detail}" if self.detail else ""
         return f"[{status}] {self.name}{col_info}{detail}"
 
 
@@ -192,7 +192,7 @@ class DataQualityChecker:
                 continue  # unknown check type - skip silently
 
             results.append(result)
-            logger.info("[dq] %s — %s", self._table_name, result)
+            logger.info("[dq] %s - %s", self._table_name, result)
 
         passed = [r for r in results if r.passed]
         failed = [r for r in results if not r.passed]

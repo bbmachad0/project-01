@@ -25,6 +25,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "kms_key_arn" {
+  description = "ARN of the KMS CMK used to encrypt the CloudWatch log group. If empty, AWS-managed encryption is used."
+  type        = string
+  default     = ""
+}
+
 # ─── Dynamic ASL Definition ──────────────────────────────────────
 
 locals {
@@ -78,6 +84,7 @@ resource "aws_sfn_state_machine" "this" {
 resource "aws_cloudwatch_log_group" "this" {
   name              = "/aws/stepfunctions/${var.pipeline_name}"
   retention_in_days = 90
+  kms_key_id        = var.kms_key_arn != "" ? var.kms_key_arn : null
   tags              = var.tags
 }
 

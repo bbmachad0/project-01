@@ -152,11 +152,11 @@ new-project: ## Scaffold a new project  (NAME=<dir_name>  SLUG=<short_id>)
 	@echo "Created infrastructure/projects/$(NAME)/"
 	@echo ""
 	@echo "Next steps:"
-	@echo "  1. Edit tables.tf    — define Glue Data Catalog tables"
-	@echo "  2. Edit jobs.tf      — define Glue Jobs"
-	@echo "  3. Edit optimizers.tf — wire table optimizers"
-	@echo "  4. Edit pipelines.tf  — compose Step Function pipelines"
-	@echo "  5. Commit and push   — CI/CD picks the new project up automatically"
+	@echo "  1. Edit tables.tf    - define Glue Data Catalog tables"
+	@echo "  2. Edit jobs.tf      - define Glue Jobs"
+	@echo "  3. Edit optimizers.tf - wire table optimizers"
+	@echo "  4. Edit pipelines.tf  - compose Step Function pipelines"
+	@echo "  5. Commit and push   - CI/CD picks the new project up automatically"
 
 .PHONY: tf-init-project
 tf-init-project: ## Init Terraform for a single project  (PROJECT=<name> ENVIRONMENT=dev|int|prod)

@@ -58,6 +58,12 @@ variable "kms_key_arn" {
   default     = ""
 }
 
+variable "subnet_arns" {
+  description = "ARNs of the VPC private subnets Glue jobs run in. Scopes CreateNetworkInterface to domain subnets only."
+  type        = list(string)
+  default     = []
+}
+
 # ─── Data Sources ────────────────────────────────────────────────
 
 data "aws_iam_policy_document" "assume_role" {
@@ -213,19 +219,42 @@ data "aws_iam_policy_document" "glue_job" {
   }
 
   # ── EC2: VPC networking for Glue connections ───────────────────
+  # Describe actions have no resource-level restriction in EC2 (AWS limitation).
+  # Create/Delete are scoped to domain subnets and account-level ENIs.
 
   statement {
-    sid = "EC2NetworkAccess"
+    sid = "EC2DescribeNetworking"
     actions = [
-      "ec2:CreateNetworkInterface",
-      "ec2:DeleteNetworkInterface",
       "ec2:DescribeNetworkInterfaces",
       "ec2:DescribeSecurityGroups",
       "ec2:DescribeSubnets",
       "ec2:DescribeVpcs",
       "ec2:DescribeRouteTables",
     ]
+    # Describe actions do not support resource-level restrictions.
     resources = ["*"]
+  }
+
+  statement {
+    sid     = "EC2CreateNetworkInterface"
+    actions = ["ec2:CreateNetworkInterface"]
+    # Scoped to domain subnets + account-level ENI and SG resources.
+    resources = concat(
+      var.subnet_arns,
+      [
+        "arn:aws:ec2:${var.region}:${var.account_id}:network-interface/*",
+        "arn:aws:ec2:${var.region}:${var.account_id}:security-group/*",
+      ]
+    )
+  }
+
+  statement {
+    sid     = "EC2DeleteNetworkInterface"
+    actions = ["ec2:DeleteNetworkInterface"]
+    # Scoped to ENIs in this account/region only.
+    resources = [
+      "arn:aws:ec2:${var.region}:${var.account_id}:network-interface/*",
+    ]
   }
 
   statement {

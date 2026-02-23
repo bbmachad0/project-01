@@ -10,3 +10,23 @@ variable "environment" {
   description = "Environment (dev, int, prod)."
   type        = string
 }
+# ─── Traceability Variables ──────────────────────────────────────────
+# Set via TF_VAR_* in CI. Default to "local" for local development runs.
+
+variable "git_sha" {
+  description = "Git commit SHA injected at deploy time (TF_VAR_git_sha)."
+  type        = string
+  default     = "local"
+}
+
+variable "deployed_by" {
+  description = "CI actor or 'local'. Injected via TF_VAR_deployed_by."
+  type        = string
+  default     = "local"
+}
+
+variable "repository" {
+  description = "Source repository. Injected via TF_VAR_repository."
+  type        = string
+  default     = "local"
+}

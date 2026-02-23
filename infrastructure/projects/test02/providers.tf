@@ -32,6 +32,9 @@ provider "aws" {
       project     = local.config.slug
       env         = var.environment
       managed_by  = "terraform"
+      git_sha     = var.git_sha
+      deployed_by = var.deployed_by
+      repository  = var.repository
     }
   }
 }

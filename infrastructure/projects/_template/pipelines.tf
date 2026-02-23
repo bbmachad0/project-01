@@ -15,5 +15,6 @@
 #       module.job_ingest_events.job_name,
 #       module.job_transform.job_name,
 #     ]
+#     kms_key_arn = local.foundation.kms_key_arn   # encrypts the pipeline log group
 #     tags = local.tags
 #   }

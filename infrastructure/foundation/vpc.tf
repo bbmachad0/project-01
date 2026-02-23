@@ -26,6 +26,7 @@ resource "aws_route_table" "private" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/${var.domain_abbr}-vpc-${var.env}/flow-logs"
   retention_in_days = 90
+  kms_key_id        = aws_kms_key.data_lake.arn
   tags              = local.common_tags
 }
 
@@ -53,6 +54,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 
 data "aws_iam_policy_document" "vpc_flow_logs_permissions" {
   statement {
+    sid = "WriteToFlowLogGroup"
     actions = [
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
@@ -60,7 +62,11 @@ data "aws_iam_policy_document" "vpc_flow_logs_permissions" {
       "logs:DescribeLogGroups",
       "logs:DescribeLogStreams",
     ]
-    resources = ["*"]
+    # Scoped to the specific flow log group and its log streams.
+    resources = [
+      aws_cloudwatch_log_group.vpc_flow_logs.arn,
+      "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:log-stream:*",
+    ]
   }
 }
 

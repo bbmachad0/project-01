@@ -20,7 +20,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
   checks: write
   pull-requests: write
 
@@ -192,3 +191,64 @@ jobs:
             fi
           done
           exit $FAILED
+
+  # ── Security Scan (SAST + SCA) ──────────────────────────────────
+  # Runs when Python code or infrastructure files change.
+  # - pip-audit : CVE scan of Python dependencies (SCA)
+  # - bandit    : Python SAST (injections, hardcoded secrets, etc.)
+  # - checkov   : Terraform / Dockerfile IaC misconfiguration scanner
+  security-scan:
+    name: Security Scan
+    needs: changes
+    if: |
+      needs.changes.outputs.core == 'true'  ||
+      needs.changes.outputs.jobs == 'true'  ||
+      needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install security tools
+        run: pip install --quiet pip-audit bandit checkov
+
+      # ─ SCA: Python dependency CVE scan ───────────────────────────
+      - name: Install project dependencies
+        if: needs.changes.outputs.core == 'true'
+        run: pip install --quiet -e '.[dev]'
+
+      - name: pip-audit (dependency CVE scan)
+        if: needs.changes.outputs.core == 'true'
+        run: pip-audit
+
+      # ─ SAST: Python static analysis ──────────────────────────────
+      - name: bandit (Python SAST)
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true'
+        run: bandit -r src/ -ll -ii --exit-zero
+        # -ll = medium+ severity, -ii = medium+ confidence
+        # --exit-zero reports findings without failing the pipeline.
+        # Remove --exit-zero once a clean baseline is established.
+
+      # ─ IaC: Terraform + Dockerfile misconfiguration ──────────────
+      - name: checkov (Terraform IaC)
+        if: needs.changes.outputs.infra == 'true'
+        run: |
+          checkov -d infrastructure/ \
+            --framework terraform \
+            --quiet \
+            --soft-fail
+        # --soft-fail reports findings without failing the pipeline.
+        # Remove --soft-fail once a clean baseline is established.
+
+      - name: checkov (Dockerfile)
+        run: |
+          checkov -f Dockerfile \
+            --framework dockerfile \
+            --quiet \
+            --soft-fail

@@ -13,7 +13,10 @@ module "s3_logs" {
   bucket_name       = "${var.domain_abbr}-logs-${data.aws_caller_identity.current.account_id}-${var.env}"
   enable_versioning = false
   kms_key_arn       = aws_kms_key.data_lake.arn
-  tags              = local.common_tags
+  # Bucket policy is managed externally (below) to combine DenyInsecureTransport
+  # with the S3 logging service delivery statement in a single policy resource.
+  create_bucket_policy = false
+  tags                 = local.common_tags
 }
 
 # Allow the S3 logging service to write to the logs bucket
@@ -23,8 +26,6 @@ resource "aws_s3_bucket_policy" "logs_delivery" {
 }
 
 data "aws_iam_policy_document" "logs_delivery" {
-  # Keep the deny-insecure-transport statement from the module
-  source_policy_documents = []
 
   statement {
     sid    = "S3LogDeliveryWrite"

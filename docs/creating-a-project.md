@@ -37,7 +37,7 @@ It appears in every resource name:
 
 | File | Contents |
 |------|----------|
-| `project.json` | Set `slug` — the only required config |
+| `project.json` | Set `slug` - the only required config |
 | `tables.tf` | Standard tables in RAW, Iceberg tables in refined/curated |
 | `jobs.tf` | One `module "job_*"` per Glue job |
 | `optimizers.tf` | One optimizer per Iceberg table |

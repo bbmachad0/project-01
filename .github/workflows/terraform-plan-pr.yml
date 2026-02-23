@@ -2,7 +2,7 @@
 # Runs terraform plan for foundation + all auto-discovered projects
 # when infra files change, then posts a combined sticky PR comment.
 #
-# No hardcoded project names — projects discovered automatically from
+# No hardcoded project names - projects discovered automatically from
 # infrastructure/projects/*/project.json.
 #
 # Requires: AWS_ROLE_ARN_DEV, AWS_ROLE_ARN_INT, AWS_ROLE_ARN_PROD
@@ -72,7 +72,10 @@ jobs:
 
       - name: Resolve AWS Account ID
         id: aws
-        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::${ACCOUNT_ID}"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
@@ -93,7 +96,7 @@ jobs:
             -backend-config="region=${REGION}" \
             -backend-config="use_lockfile=true" -input=false -no-color > /dev/null 2>&1
           terraform -chdir="infrastructure/environments/${ENV}" plan \
-            -no-color -input=false 2>&1 | head -200 > /tmp/plan-foundation.txt
+            -no-color -input=false 2>&1 > /tmp/plan-foundation.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           set -e
         continue-on-error: true
@@ -130,7 +133,7 @@ jobs:
               -backend-config="region=${REGION}" \
               -backend-config="use_lockfile=true" -input=false -no-color > /dev/null 2>&1
             terraform -chdir="infrastructure/projects/${PROJECT}" plan \
-              -var="environment=${ENV}" -no-color -input=false 2>&1 | head -150 >> /tmp/plan-projects.txt
+              -var="environment=${ENV}" -no-color -input=false 2>&1 >> /tmp/plan-projects.txt
             [[ ${PIPESTATUS[0]} -ne 0 ]] && OVERALL_EXIT=1
             echo "" >> /tmp/plan-projects.txt
           done <<< "$PROJECTS"
@@ -159,7 +162,7 @@ jobs:
 
             const body = [
               `<!-- tf-plan-${env} -->`,
-              `### ${status} Terraform Plan — \`${env}\``,
+              `### ${status} Terraform Plan - \`${env}\``,
               '',
               `<details><summary>Foundation</summary>`,
               '',
