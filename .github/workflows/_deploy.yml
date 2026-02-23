@@ -248,6 +248,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ needs.changes.outputs.aws_region }}
 
+      - name: Resolve AWS Account ID
+        id: aws
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::${ACCOUNT_ID}"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+
       - name: Read project slug
         id: project
         run: |
@@ -263,7 +270,7 @@ jobs:
         working-directory: infrastructure/projects/${{ matrix.project }}
         run: |
           terraform init \
-            -backend-config="bucket=tfstate-${{ needs.foundation.outputs.account_id }}" \
+            -backend-config="bucket=tfstate-${{ steps.aws.outputs.account_id }}" \
             -backend-config="key=projects/${{ steps.project.outputs.slug }}/terraform.tfstate" \
             -backend-config="region=${{ needs.changes.outputs.aws_region }}" \
             -backend-config="use_lockfile=true"
