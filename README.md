@@ -671,7 +671,22 @@ This copies `_template/` to `infrastructure/projects/myproject/` and creates `sr
 
 See [docs/creating-a-project.md](docs/creating-a-project.md) for the complete guide.
 
-### 10.4 Adding a New Glue Job
+### 10.4 Removing a Project
+
+To decommission a project, simply delete its directories and push:
+
+```bash
+rm -rf infrastructure/projects/myproject src/jobs/myproject
+git add -A && git commit -m "chore: remove myproject" && git push origin dev
+```
+
+The CI/CD pipeline automatically detects the removal and runs `terraform destroy` for the project, tearing down all its AWS resources (Glue jobs, IAM roles, tables, optimizers, Step Functions pipelines). Job scripts are also removed from S3 via `s3 sync --delete`. No manual intervention or local credentials required.
+
+> **Note:** data objects in S3 data buckets are not deleted (buckets have `prevent_destroy = true`). Clean up data prefixes manually if needed.
+
+See [docs/ci-cd.md- Removing a Project](docs/ci-cd.md#removing-a-project) for full details and caveats.
+
+### 10.5 Adding a New Glue Job
 
 1. Create `src/jobs/<project>/job_<name>.py`.
 2. Add a `module "job_<name>"` block to `infrastructure/projects/<project>/jobs.tf`.
@@ -699,9 +714,9 @@ All development work happens on `feature/*` branches. PRs target `dev`. Promotio
 | Workflow | Trigger | Actions |
 |---|---|---|
 | `ci.yml` | Every push, every PR | Lint → type-check → test → Terraform validate → wheel build → security scan |
-| `deploy-dev.yml` | Push to `dev` | Foundation → artifacts → projects (Dev account) |
-| `deploy-int.yml` | Push to `int` | Foundation → artifacts → projects (Int account) |
-| `deploy-prod.yml` | Push to `main` | Foundation → artifacts → projects (Prod account) |
+| `deploy-dev.yml` | Push to `dev` | Foundation → artifacts → destroy removed → deploy projects (Dev account) |
+| `deploy-int.yml` | Push to `int` | Foundation → artifacts → destroy removed → deploy projects (Int account) |
+| `deploy-prod.yml` | Push to `main` | Foundation → artifacts → destroy removed → deploy projects (Prod account) |
 | `terraform-plan-pr.yml` | PR touching `infrastructure/` | Runs `terraform plan`, posts **full** output as PR comment |
 
 ### 11.3 AWS Authentication (OIDC)
@@ -746,20 +761,28 @@ For `dev` and `int`, relax the `sub` condition to `"repo:<org>/<repo>:*"` to all
 The reusable `_deploy.yml` workflow enforces a strict deploy order:
 
 ```
-1. Foundation Terraform Apply
-   (S3 buckets, KMS, VPC, Glue databases- shared infra must exist first)
+1. Detect Changes + Discover Projects
+   (paths-filter for component changes; git diff for added/removed projects)
         │
         ▼
-2. Artifacts Upload
-   (Build wheel versioned with commit SHA → S3; sync job scripts → S3)
-   (Skipped if neither src/core nor src/jobs changed)
+2. Foundation Terraform Apply
+   (S3 buckets, KMS, VPC, Glue databases— shared infra must exist first)
+        │
+        ├──────────────────────────┐
+        ▼                          ▼
+3a. Artifacts Upload          3b. Destroy Removed Projects
+   (wheel + scripts → S3)       (terraform destroy from HEAD~1)
         │
         ▼
-3. Project Terraform Apply  (parallel matrix, auto-discovered)
-   (Glue jobs reference the wheel + scripts uploaded in step 2)
+4. Deploy Projects  (parallel matrix, auto-discovered)
+   (Glue jobs reference the wheel + scripts uploaded in step 3a)
 ```
 
-This ordering guarantees that S3 buckets always exist before artifacts are uploaded, and artifacts always exist before Glue jobs reference them.
+This ordering guarantees that S3 buckets always exist before artifacts are uploaded, artifacts always exist before Glue jobs reference them, and removed projects are torn down in the same pipeline run.
+
+**Selective deployment:** if only `infrastructure/projects/project01/` changed, only `project01` is re-applied. If shared components changed (core, jobs, foundation, modules), all projects are re-applied.
+
+**Automated teardown:** when a project directory is deleted from the repo, the `destroy-projects` job restores its Terraform files from `HEAD~1` and runs `terraform destroy`, ensuring the CI/CD pipeline is the single source of truth for all cloud mutations— including resource decommissioning. See [docs/ci-cd.md](docs/ci-cd.md#removing-a-project) for details.
 
 ### 11.5 Change Detection
 
@@ -770,9 +793,9 @@ This ordering guarantees that S3 buckets always exist before artifacts are uploa
 | `core` | `src/core/**`, `pyproject.toml` | Wheel rebuild + all projects re-deployed |
 | `jobs` | `src/jobs/**` | Script upload + all projects re-deployed |
 | `foundation_infra` | `infrastructure/foundation/**`, `infrastructure/environments/**`, `infrastructure/modules/**`, `setup/domain.json` | Foundation + all projects re-applied |
-| `projects_infra` | `infrastructure/projects/**` | Changed projects only |
+| `projects_infra` | `infrastructure/projects/**` | Changed projects only; **removed** projects auto-destroyed |
 
-If only `infrastructure/projects/project01/` changed, only `project01` is re-applied- other projects are bypassed.
+If only `infrastructure/projects/project01/` changed, only `project01` is re-applied— other projects are bypassed. If a project directory is deleted, its AWS resources are automatically destroyed (see [Section 11.4](#114-deploy-sequence)).
 
 ### 11.6 Security Scanning in CI
 

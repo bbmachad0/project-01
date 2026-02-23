@@ -10,9 +10,10 @@
 #   - src/core or src/jobs changed         → deploy ALL projects (new wheel/scripts)
 #
 # Deploy order:
-#   1. Foundation    (S3, IAM, Glue databases, VPC)
-#   2. Artifacts     (wheel + job scripts to S3)
-#   3. Projects      (only affected ones, in parallel)
+#   1. Foundation          (S3, IAM, Glue databases, VPC)
+#   2. Artifacts           (wheel + job scripts to S3)
+#   3. Destroy Projects    (removed projects- terraform destroy from previous state)
+#   4. Deploy Projects     (new/changed projects- terraform apply, in parallel)
 
 name: _deploy
 
@@ -94,6 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.list.outputs.matrix }}
+      removed_matrix: ${{ steps.removed.outputs.removed_matrix }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
@@ -123,6 +125,31 @@ jobs:
 
           MATRIX=$(echo "$DEPLOY" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect removed projects
+        id: removed
+        run: |
+          # Projects that had project.json in the previous commit
+          PREV=$(git ls-tree -r --name-only HEAD~1 -- infrastructure/projects/ 2>/dev/null \
+            | grep '/project\.json$' | grep -v '_template/' \
+            | sed 's|infrastructure/projects/||;s|/project\.json||' | sort) || true
+
+          # Projects in the current commit
+          CURR=$(find infrastructure/projects -maxdepth 2 -name 'project.json' \
+            ! -path '*/_template/*' \
+            | sed 's|infrastructure/projects/||;s|/project\.json||' | sort)
+
+          # Removed = existed before but no longer present
+          REMOVED=$(comm -23 <(echo "$PREV") <(echo "$CURR"))
+
+          if [[ -n "$REMOVED" ]]; then
+            echo "::warning::Removed projects detected- will run terraform destroy: $(echo $REMOVED | tr '\n' ' ')"
+          else
+            echo "No removed projects detected"
+          fi
+
+          MATRIX=$(echo "$REMOVED" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "removed_matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
   # ── Deploy Foundation ────────────────────────────────────────────
   foundation:
@@ -228,6 +255,71 @@ jobs:
           aws s3 sync src/jobs/ \
             "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/jobs/" \
             --delete --exact-timestamps
+
+  # ── Destroy Removed Projects ───────────────────────────────────
+  # When a project directory is deleted from the repo, this job
+  # recovers the Terraform files from the previous commit (HEAD~1)
+  # and runs `terraform destroy` to tear down the project's AWS
+  # resources.  This guarantees the CI/CD pipeline is the single
+  # source of truth for ALL cloud mutations- including teardown.
+  destroy-projects:
+    name: "Destroy › ${{ matrix.project }}"
+    needs: [changes, foundation, discover]
+    if: needs.discover.outputs.removed_matrix != '[]' && needs.discover.outputs.removed_matrix != ''
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.discover.outputs.removed_matrix) }}
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 2
+
+      - name: Restore project files from previous commit
+        run: |
+          echo "Restoring infrastructure/projects/${{ matrix.project }}/ from HEAD~1"
+          git checkout HEAD~1 -- "infrastructure/projects/${{ matrix.project }}/"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ needs.changes.outputs.aws_region }}
+
+      - name: Resolve AWS Account ID
+        id: aws
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::${ACCOUNT_ID}"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Read project slug from restored files
+        id: project
+        run: |
+          SLUG=$(jq -r .slug "infrastructure/projects/${{ matrix.project }}/project.json")
+          echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        working-directory: infrastructure/projects/${{ matrix.project }}
+        run: |
+          terraform init \
+            -backend-config="bucket=tfstate-${{ steps.aws.outputs.account_id }}" \
+            -backend-config="key=projects/${{ steps.project.outputs.slug }}/terraform.tfstate" \
+            -backend-config="region=${{ needs.changes.outputs.aws_region }}" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform Destroy
+        working-directory: infrastructure/projects/${{ matrix.project }}
+        run: |
+          echo "::warning::Destroying all resources for project '${{ matrix.project }}' (slug: ${{ steps.project.outputs.slug }})"
+          terraform plan -destroy -var="environment=${{ env.ENV }}" -out=tfplan -input=false
+          terraform apply -auto-approve tfplan
 
   # ── Deploy Projects (selective, parallel) ────────────────────────
   deploy-projects:

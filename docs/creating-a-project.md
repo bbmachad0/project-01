@@ -75,6 +75,39 @@ make test
 
 ---
 
+## Removing a Project
+
+Projects are decommissioned through the same CI/CD pipeline that creates them —
+no manual `terraform destroy` required.
+
+### Steps
+
+```bash
+# 1. Delete both directories
+rm -rf infrastructure/projects/<my_project>
+rm -rf src/jobs/<my_project>
+
+# 2. Commit and push
+git add -A
+git commit -m "chore: remove <my_project>"
+git push origin dev
+```
+
+The deploy workflow automatically detects the removed `project.json` and:
+
+1. Restores the Terraform files from the previous commit.
+2. Runs `terraform destroy` to remove all AWS resources (Glue jobs, IAM roles,
+   tables, optimizers, Step Functions pipelines).
+3. Removes the project's job scripts from S3 (via `s3 sync --delete`).
+
+> **Note:** Underlying data in S3 data buckets (raw/refined/curated) is **not**
+> deleted. Clean up data prefixes manually if needed.
+
+See [ci-cd.md- Removing a Project](ci-cd.md#removing-a-project) for full
+details and caveats.
+
+---
+
 ## Checklist
 
 - [ ] Template copied to `infrastructure/projects/<name>/`

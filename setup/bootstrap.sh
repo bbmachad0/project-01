@@ -20,6 +20,15 @@ SPARK_VERSION="3.5.6"
 HADOOP_VERSION="3"
 TERRAFORM_VERSION="1.14.5"
 
+# ─── Architecture Detection ─────────────────────────────────────
+
+ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")  # amd64 | arm64
+case "$(uname -m)" in
+    x86_64)  UNAME_ARCH="x86_64" ;;
+    aarch64) UNAME_ARCH="aarch64" ;;
+    *)       UNAME_ARCH="x86_64" ;;
+esac
+
 # ─── Project Config ─────────────────────────────────────────────
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -138,7 +147,7 @@ install_aws_cli() {
     fi
     info "Installing AWS CLI v2 ..."
     local tmp="/tmp/awscli"
-    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "${tmp}.zip"
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${UNAME_ARCH}.zip" -o "${tmp}.zip"
     unzip -q "${tmp}.zip" -d "${tmp}"
     sudo "${tmp}/aws/install" --update
     rm -rf "${tmp}" "${tmp}.zip"
@@ -153,18 +162,22 @@ install_terraform() {
         tfver=$(terraform version -json 2>/dev/null \
             | "python${PYTHON_VERSION}" -c "import sys,json;print(json.load(sys.stdin)['terraform_version'])" 2>/dev/null \
             || terraform version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-        ok "Terraform ${tfver} already installed"
-        return 0
+        if [[ "${tfver}" == "${TERRAFORM_VERSION}" ]]; then
+            ok "Terraform ${TERRAFORM_VERSION} already installed"
+            return 0
+        else
+            warn "Terraform ${tfver} found, but ${TERRAFORM_VERSION} required- upgrading ..."
+        fi
     fi
-    info "Installing Terraform ..."
-    wget -qO- https://apt.releases.hashicorp.com/gpg \
-        | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
-https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
-        | sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
-    sudo apt-get update -qq
-    sudo apt-get install -y -qq terraform
-    ok "Terraform $(terraform version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') installed"
+    info "Installing Terraform ${TERRAFORM_VERSION} ..."
+    local tmp="/tmp/terraform_${TERRAFORM_VERSION}.zip"
+    curl -fsSL \
+        "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip" \
+        -o "${tmp}"
+    unzip -o -q "${tmp}" -d /tmp/terraform-bin
+    sudo install -m 0755 /tmp/terraform-bin/terraform /usr/local/bin/terraform
+    rm -rf "${tmp}" /tmp/terraform-bin
+    ok "Terraform ${TERRAFORM_VERSION} installed"
 }
 
 # ─── UV (with UVX) ──────────────────────────────────────────────
@@ -184,22 +197,20 @@ install_uv() {
 
 setup_env_vars() {
     local profile_script="/etc/profile.d/data-domain-tools.sh"
-    if [[ -f "${profile_script}" ]]; then
-        ok "Environment variables already configured"
-    else
-        info "Configuring environment variables ..."
-        sudo tee "${profile_script}" > /dev/null <<ENVEOF
-export JAVA_HOME=/usr/lib/jvm/java-${JAVA_VERSION}-openjdk-amd64
+
+    # Always regenerate to keep arch/version in sync
+    info "Configuring environment variables ..."
+    sudo tee "${profile_script}" > /dev/null <<ENVEOF
+export JAVA_HOME=/usr/lib/jvm/java-${JAVA_VERSION}-openjdk-${ARCH}
 export SPARK_HOME=/opt/spark
 export SCALA_HOME=/usr/local/share/scala-${SCALA_VERSION}
 export PYSPARK_PYTHON=python${PYTHON_VERSION}
-export PATH="\${SPARK_HOME}/bin:\${SCALA_HOME}/bin:\${PATH}"
+export PATH="\${HOME}/.local/bin:\${SPARK_HOME}/bin:\${SCALA_HOME}/bin:\${PATH}"
 ENVEOF
-        ok "Environment variables written to ${profile_script}"
-    fi
+    ok "Environment variables written to ${profile_script}"
 
     # Source for current session
-    export JAVA_HOME="/usr/lib/jvm/java-${JAVA_VERSION}-openjdk-amd64"
+    export JAVA_HOME="/usr/lib/jvm/java-${JAVA_VERSION}-openjdk-${ARCH}"
     export SPARK_HOME="/opt/spark"
     export SCALA_HOME="/usr/local/share/scala-${SCALA_VERSION}"
     export PYSPARK_PYTHON="python${PYTHON_VERSION}"
