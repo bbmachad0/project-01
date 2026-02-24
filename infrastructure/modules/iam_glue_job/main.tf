@@ -231,7 +231,12 @@ data "aws_iam_policy_document" "glue_job" {
       "ec2:DescribeVpcs",
       "ec2:DescribeRouteTables",
     ]
-    # Describe actions do not support resource-level restrictions.
+    # INTENTIONAL: EC2 Describe (List-category) actions do NOT support resource-level
+    # ARN restrictions in IAM - AWS requires resources = ["*"] for all of them.
+    # Reference: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
+    # This is NOT a misconfiguration. Do not change to a scoped ARN - it would have no
+    # effect and would break Glue's VPC network interface discovery at runtime.
+    # tfsec:ignore:AWS099 checkov:skip=CKV_AWS_355:EC2 Describe actions require wildcard resource per AWS IAM
     resources = ["*"]
   }
 

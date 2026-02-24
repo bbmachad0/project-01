@@ -15,6 +15,7 @@ Status: `open` | `in-progress` | `done`
 - [SecOps](#secops)
 - [DevOps / CI-CD](#devops--ci-cd)
 - [Platform / DataOps](#platform--dataops)
+- [Data Engineering / Core Library](#data-engineering--core-library)
 
 ---
 
@@ -29,7 +30,7 @@ Tasks related to IAM, network security, encryption, supply chain security, and c
 | Field | Value |
 |---|---|
 | **Severity** | CRITICAL |
-| **Status** | open |
+| **Status** | done |
 | **Files** | `infrastructure/foundation/iam_orchestration.tf` |
 
 #### Problem
@@ -60,7 +61,7 @@ Split the `CloudWatchLogs` statement into two scoped statements:
 | Field | Value |
 |---|---|
 | **Severity** | HIGH |
-| **Status** | open |
+| **Status** | done |
 | **Files** | `infrastructure/modules/iam_glue_job/main.tf` |
 
 #### Problem
@@ -78,7 +79,7 @@ Add a comment in `iam_glue_job/main.tf` explicitly noting that `resources = ["*"
 | Field | Value |
 |---|---|
 | **Severity** | HIGH |
-| **Status** | open |
+| **Status** | done |
 | **Files** | `.github/workflows/ci.yml`, `pyproject.toml` |
 
 #### Problem
@@ -129,7 +130,7 @@ GitHub Actions `uses` references pin to mutable tags (e.g. `actions/checkout@v4`
 | Field | Value |
 |---|---|
 | **Severity** | MEDIUM |
-| **Status** | open |
+| **Status** | done |
 | **Files** | `.github/workflows/ci.yml` |
 
 #### Problem
@@ -214,9 +215,435 @@ When running jobs locally (`ENV=local`), `_resolve_account_id()` in `settings.py
 
 ---
 
+### P0-DEV-04- Documentation API Signatures Do Not Match Code
+
+| Field | Value |
+|---|---|
+| **Severity** | HIGH |
+| **Status** | open |
+| **Files** | `docs/adding-a-job.md` |
+
+#### Problem
+
+The example job template in `adding-a-job.md` uses function signatures that **do not exist** in the actual codebase:
+
+```python
+# In the docs (WRONG):
+df = read_iceberg(spark, catalog_db=cfg["refined_db"], table="<source>")
+write_iceberg(df=result, path=f"s3://...", catalog_db=cfg["curated_db"], table="<target>", mode="append")
+```
+
+The actual signatures in `core/io/readers.py` and `core/io/writers.py` are:
+
+```python
+# Actual code:
+df = read_iceberg(spark, table="glue_catalog.{db}.{table}")
+write_iceberg(df=result, table="glue_catalog.{db}.{table}", mode="append")
+```
+
+Additionally, the config keys used in the docs (`refined_db`, `curated_db`) do not exist in `get_config()` output. The correct keys are `iceberg_database_refined` and `iceberg_database_curated`.
+
+A developer following this documentation will write code that fails immediately.
+
+#### Solution
+
+Update the example in `docs/adding-a-job.md` to match the actual API:
+
+```python
+from core.spark.session import get_spark
+from core.config.settings import get_config
+from core.io.readers import read_iceberg
+from core.io.writers import write_iceberg
+from core.logging.logger import get_logger
+
+
+def main() -> None:
+    spark = get_spark(app_name="<project>-<name>")
+    cfg = get_config()
+    log = get_logger(__name__)
+
+    log.info("Starting <name> job")
+
+    # ── Extract ──────────────────────────────────
+    df = read_iceberg(spark, f"glue_catalog.{cfg['iceberg_database_refined']}.<source>")
+
+    # ── Transform ────────────────────────────────
+    result = df  # your PySpark transformations here
+
+    # ── Load ─────────────────────────────────────
+    write_iceberg(
+        df=result,
+        table=f"glue_catalog.{cfg['iceberg_database_curated']}.<target>",
+        mode="append",
+    )
+
+    log.info("<name> job complete")
+    spark.stop()
+```
+
+Also remove `import sys` from the example since it is unused.
+
+---
+
+### P0-DEV-05- Makefile `WHEEL_NAME` Still Uses Removed `core-latest` Alias
+
+| Field | Value |
+|---|---|
+| **Severity** | MEDIUM |
+| **Status** | open |
+| **Files** | `Makefile` |
+
+#### Problem
+
+The Makefile defines `WHEEL_NAME := core-latest-py3-none-any.whl` and uses it in the `upload-wheel` target. The CI/CD pipeline (`_deploy.yml`) removed the `core-latest` alias as part of the security hardening sprint (completed in Phase 2) and now uploads only versioned wheels (`core-1.0.0+{sha}-py3-none-any.whl`).
+
+The Makefile's `upload-wheel` target therefore uploads a wheel with a different filename than what the CI pipeline uses, creating inconsistency between local and CI deployments.
+
+#### Solution
+
+1. Update the Makefile to derive the wheel filename dynamically:
+
+   ```makefile
+   .PHONY: upload-wheel
+   upload-wheel: build ## Build and upload wheel to S3
+   	WHEEL=$$(ls $(WHEEL_DIR)/*.whl | head -1) && \
+   	aws s3 cp "$$WHEEL" \
+   		"s3://$(DOMAIN_ABBR)-artifacts-$(ACCOUNT_ID)-$(ENVIRONMENT)/wheels/$${WHEEL##*/}"
+   ```
+
+2. Remove the `WHEEL_NAME` variable entirely since it's no longer used.
+
+3. Ensure consistency with the CI pipeline's upload path (`wheels/` prefix).
+
+---
+
+### P0-DEV-06- `creating-a-project.md` Contains Stale References
+
+| Field | Value |
+|---|---|
+| **Severity** | LOW |
+| **Status** | open |
+| **Files** | `docs/creating-a-project.md` |
+
+#### Problem
+
+The project creation checklist in `creating-a-project.md` includes the item:
+
+> - [ ] Module block added to `infrastructure/projects/main.tf`
+
+This file does not exist. Projects are independent Terraform root modules- there is no central `main.tf` file that enumerates projects. Also, the checklist mentions `optimizers.tf` as requiring one optimizer per Iceberg table, but optimizers are now bundled automatically inside the `glue_iceberg_table` module.
+
+#### Solution
+
+1. Remove the line "Module block added to `infrastructure/projects/main.tf`" from the checklist.
+2. Update the `optimizers.tf` checklist item to note that optimizers are created automatically by the Iceberg table module and that `optimizers.tf` is kept empty by convention.
+3. Add a checklist item for creating the `src/jobs/<name>/` directory (aligns with P0-04).
+
+---
+
 ## Platform / DataOps
 
 Tasks related to the developer platform, project onboarding, data governance, and template completeness.
+
+---
+
+### P0-06- Glue Job Arguments Not Bridged to Environment Variables
+
+| Field | Value |
+|---|---|
+| **Severity** | CRITICAL |
+| **Status** | open |
+| **Files** | `src/core/config/settings.py`, `src/core/spark/session.py`, `src/jobs/**/*.py` |
+
+#### Problem
+
+The `--ENV` default argument set in Glue job Terraform definitions (`default_arguments = { "--ENV" = var.environment }`) is passed to the job via `sys.argv`, which is how AWS Glue delivers custom parameters. However, `settings.py` reads the environment via `os.getenv("ENV")` and `session.py` uses the same mechanism in `_is_local()`. AWS Glue does **not** automatically set custom `--arguments` as OS environment variables- they are only accessible through `sys.argv` or `awsglue.utils.getResolvedOptions`.
+
+This means that when a job runs in AWS Glue:
+
+1. `os.getenv("ENV")` returns `None` → defaults to `"local"`.
+2. `_is_local()` returns `True` → `get_spark()` attempts to build a **local** PySpark session instead of reusing the Glue-managed session.
+3. `get_config()` resolves `env=local` → bucket names use the `-local` suffix instead of the correct environment suffix (e.g. `-dev`).
+
+**All deployed jobs would either crash or silently read/write wrong S3 paths.**
+
+#### Solution
+
+Create a lightweight argument bridge in `core` that parses `sys.argv` for Glue-style `--KEY value` pairs **without importing `awsglue`**, and inject them as environment variables before any other module consumes them. This preserves the "no `awsglue` imports" principle.
+
+1. **Create `src/core/config/args.py`**:
+
+   ```python
+   """Bridge AWS Glue job arguments (sys.argv) to environment variables.
+
+   AWS Glue passes custom arguments as --KEY value pairs in sys.argv.
+   This module parses them and sets them as OS environment variables
+   so that settings.py and session.py can read them transparently.
+
+   Must be imported BEFORE settings.py (handled by core.__init__).
+   """
+   import os
+   import sys
+
+   _GLUE_ARG_PREFIX = "--"
+
+   def bridge_glue_args() -> None:
+       args = sys.argv[1:]
+       i = 0
+       while i < len(args):
+           key = args[i]
+           if key.startswith(_GLUE_ARG_PREFIX) and i + 1 < len(args):
+               env_key = key.lstrip("-")
+               value = args[i + 1]
+               # Only set if not already in the environment
+               if env_key not in os.environ:
+                   os.environ[env_key] = value
+               i += 2
+           else:
+               i += 1
+
+   bridge_glue_args()
+   ```
+
+2. **In `core/__init__.py`**, import the bridge **before** other modules:
+
+   ```python
+   import core.config.args  # noqa: F401  # must be first
+   from core.config.settings import get_config
+   from core.logging.logger import get_logger
+   from core.spark.session import get_spark
+   ```
+
+3. **Add unit tests** to verify that `--ENV dev --CUSTOM_VAR value` pairs in `sys.argv` are correctly bridged.
+
+4. **Update `docs/adding-a-job.md`** to document that Glue `default_arguments` keys (without the `--` prefix) become available as both environment variables and `get_config()` keys at runtime.
+
+#### References
+
+- AWS Documentation: [Accessing Parameters](https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-get-resolved-options.html)
+- This is a blocking issue- the template cannot function in AWS Glue without this fix.
+
+---
+
+### P0-07- Missing VPC Endpoints for STS and CloudWatch Logs
+
+| Field | Value |
+|---|---|
+| **Severity** | HIGH |
+| **Status** | open |
+| **Files** | `infrastructure/foundation/subnets.tf`, `src/core/config/settings.py` |
+
+#### Problem
+
+The VPC has only two endpoints: S3 (Gateway) and Glue API (Interface). The private subnets have no NAT gateway and no internet gateway- by design, all traffic must flow through VPC endpoints.
+
+`settings.py` calls `boto3.client("sts").get_caller_identity()` at module import time to resolve the AWS account ID for bucket naming. Without an STS VPC endpoint, this call will **timeout** (default ~60 seconds), and fall back to an empty string. This causes all dynamically built bucket names to be malformed (missing the account ID segment).
+
+Additionally, Glue workers need to send execution logs to CloudWatch Logs. While Glue manages some logging internally, the custom structured logging via `core.logging.logger` writes to `stderr` which Glue forwards to CloudWatch- but any explicit `boto3` CloudWatch Logs calls from the core library or future extensions would also fail.
+
+#### Solution
+
+1. **Add an STS Interface VPC endpoint** in `subnets.tf`:
+
+   ```hcl
+   resource "aws_vpc_endpoint" "sts" {
+     vpc_id              = aws_vpc.main.id
+     service_name        = "com.amazonaws.${var.aws_region}.sts"
+     vpc_endpoint_type   = "Interface"
+     subnet_ids          = aws_subnet.private[*].id
+     private_dns_enabled = true
+     security_group_ids  = [aws_security_group.glue_endpoint.id]
+
+     tags = merge(local.common_tags, {
+       Name = "${var.domain_abbr}-vpce-sts-${var.env}"
+     })
+   }
+   ```
+
+2. **Add a CloudWatch Logs Interface VPC endpoint** (for future-proofing and explicit log API calls):
+
+   ```hcl
+   resource "aws_vpc_endpoint" "logs" {
+     vpc_id              = aws_vpc.main.id
+     service_name        = "com.amazonaws.${var.aws_region}.logs"
+     vpc_endpoint_type   = "Interface"
+     subnet_ids          = aws_subnet.private[*].id
+     private_dns_enabled = true
+     security_group_ids  = [aws_security_group.glue_endpoint.id]
+
+     tags = merge(local.common_tags, {
+       Name = "${var.domain_abbr}-vpce-logs-${var.env}"
+     })
+   }
+   ```
+
+3. Optionally, refactor `settings.py` to avoid the STS call entirely (see P0-PLAT-06).
+
+#### References
+
+- AWS Documentation: [VPC Endpoints for AWS STS](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_sts_vpce.html)
+- The STS Interface endpoint has per-hour and per-GB costs (~$7.20/month per AZ). Budget accordingly.
+
+---
+
+### P0-08- `.env` File Generated But Never Loaded
+
+| Field | Value |
+|---|---|
+| **Severity** | HIGH |
+| **Status** | open |
+| **Files** | `setup/bootstrap.sh`, `src/core/config/settings.py`, `Makefile`, `pyproject.toml` |
+
+#### Problem
+
+`bootstrap.sh` generates a `.env` file with `ENV=local`, `AWS_REGION`, `AWS_ACCOUNT_ID`, and other configuration values. However, there is **no mechanism to load this file**:
+
+- `python-dotenv` is not a project dependency.
+- `settings.py` does not load `.env`.
+- `make run-local` does not `source .env` before invoking the job.
+- `make docker-run` does not pass `--env-file .env`.
+
+Without a loading mechanism, the generated `.env` has no effect, and environment variables like `AWS_ACCOUNT_ID` (needed for bucket name resolution) are never set.
+
+#### Solution
+
+1. **Add `python-dotenv`** to `pyproject.toml` dependencies:
+
+   ```toml
+   dependencies = [
+       "pyspark>=3.5,<3.6",
+       "boto3>=1.35",
+       "python-dotenv>=1.0",
+   ]
+   ```
+
+2. **Load `.env` in `settings.py`** at module level (before `_resolve_account_id`):
+
+   ```python
+   from dotenv import load_dotenv
+   load_dotenv()  # loads .env from CWD or parent directories
+   ```
+
+3. **Alternatively** (if adding a dependency is undesirable), load `.env` in the `Makefile`:
+
+   ```makefile
+   .PHONY: run-local
+   run-local: ## Run a job locally
+   	set -a && source .env && set +a && ENV=local $(PYTHON) src/jobs/$(JOB)
+   ```
+
+   And in `docker-run`:
+
+   ```makefile
+   .PHONY: docker-run
+   docker-run:
+   	$(DOCKER) run --rm --env-file .env ...
+   ```
+
+4. **Document** in `setup/README.md` that after bootstrap, developers should either source `.env` manually or rely on the Makefile targets.
+
+---
+
+### P0-09- Step Functions Pipeline: No Retry or Error Handling
+
+| Field | Value |
+|---|---|
+| **Severity** | MEDIUM |
+| **Status** | open |
+| **Files** | `infrastructure/modules/stepfunction_pipeline/main.tf` |
+
+#### Problem
+
+The dynamically generated ASL definition for Step Functions pipelines produces sequential tasks with no `Retry` or `Catch` blocks. In production, Glue jobs can fail due to transient issues (throttling, spot instance reclaim, S3 eventual consistency). Without retry logic, a single transient failure stops the entire pipeline immediately, requiring manual re-execution.
+
+AWS [recommends](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html) adding Retry with exponential backoff as a best practice for all Task states.
+
+#### Solution
+
+1. **Add Retry and Catch blocks** to each generated state:
+
+   ```hcl
+   locals {
+     states = { for i, name in var.glue_job_names :
+       "Run_${local.sanitised_names[i]}" => jsondecode(jsonencode({
+         Type     = "Task"
+         Resource = "arn:aws:states:::glue:startJobRun.sync"
+         Parameters = { JobName = name }
+         Retry = [{
+           ErrorEquals     = ["States.ALL"]
+           IntervalSeconds = 60
+           MaxAttempts     = var.max_retries
+           BackoffRate     = 2.0
+         }]
+         Catch = [{
+           ErrorEquals = ["States.ALL"]
+           Next        = "PipelineFailed"
+         }]
+         Next = i < length(var.glue_job_names) - 1 ? "Run_${local.sanitised_names[i + 1]}" : "PipelineSucceeded"
+         # ... conditional End handling
+       }))
+     }
+   }
+   ```
+
+2. **Add terminal states** (`PipelineSucceeded`, `PipelineFailed`) for clean reporting.
+
+3. **Add variables** for `max_retries` (default: 2) and `backoff_seconds` (default: 60) to make retry behaviour configurable per pipeline.
+
+4. Optionally, add an SNS notification step on failure (integrates with P0-10).
+
+---
+
+### P0-10- No Observability or Alerting Infrastructure
+
+| Field | Value |
+|---|---|
+| **Severity** | MEDIUM |
+| **Status** | open |
+| **Files** | `infrastructure/foundation/`, `infrastructure/modules/stepfunction_pipeline/main.tf` |
+
+#### Problem
+
+There are no CloudWatch Alarms, SNS topics, or EventBridge rules configured anywhere in the template. When a Glue job fails, a Step Functions pipeline errors out, or an optimizer encounters issues, **no one is notified**. In production, this means failures can go undetected for hours or days.
+
+For a Data Mesh domain handling data products with SLAs, this is a critical operational gap.
+
+#### Solution
+
+1. **Create a foundation-level SNS topic** for pipeline alerts:
+
+   ```hcl
+   resource "aws_sns_topic" "pipeline_alerts" {
+     name              = "${var.domain_abbr}-pipeline-alerts-${var.env}"
+     kms_master_key_id = aws_kms_key.data_lake.arn
+     tags              = local.common_tags
+   }
+   ```
+
+2. **Add an EventBridge rule** to capture Step Functions execution failures:
+
+   ```hcl
+   resource "aws_cloudwatch_event_rule" "sfn_failure" {
+     name = "${var.domain_abbr}-sfn-failure-${var.env}"
+     event_pattern = jsonencode({
+       source      = ["aws.states"]
+       detail-type = ["Step Functions Execution Status Change"]
+       detail      = { status = ["FAILED", "TIMED_OUT", "ABORTED"] }
+     })
+   }
+
+   resource "aws_cloudwatch_event_target" "sfn_failure_sns" {
+     rule      = aws_cloudwatch_event_rule.sfn_failure.name
+     target_id = "sns"
+     arn       = aws_sns_topic.pipeline_alerts.arn
+   }
+   ```
+
+3. **Add Glue job failure EventBridge rule** similarly for `"detail-type": ["Glue Job State Change"]` with `"state": ["FAILED", "TIMEOUT", "ERROR"]`.
+
+4. **Export the SNS topic ARN** from foundation outputs so projects can subscribe additional targets (email, Slack webhook via Lambda, PagerDuty).
+
+5. **Document** the alerting setup and how teams should subscribe to the topic.
 
 ---
 
@@ -290,6 +717,211 @@ The `core-latest-py3-none-any.whl` alias upload was removed from `_deploy.yml` a
 2. Pass `wheel_version` as a Terraform variable (set from `TF_VAR_wheel_version` in CI alongside the existing traceability vars).
 
 3. Alternatively, store the current wheel path in SSM Parameter Store after upload and read it as a `data.aws_ssm_parameter` in Terraform- decoupling the wheel version from the Terraform apply step.
+
+---
+
+## Data Engineering / Core Library
+
+Tasks related to the shared `core` Python library, data quality, job patterns, and test coverage.
+
+---
+
+### P0-ENG-01- `settings.py` Module-Level Side Effects (STS Call at Import Time)
+
+| Field | Value |
+|---|---|
+| **Severity** | MEDIUM |
+| **Status** | open |
+| **Files** | `src/core/config/settings.py` |
+
+#### Problem
+
+`_resolve_account_id()`, `_load_domain()`, and the subsequent construction of `_DEFAULTS` all execute as **module-level code** when `settings.py` is first imported. This means:
+
+1. **Every `import core.config.settings`** triggers an STS network call (or catches the timeout/exception). In a test suite with 20+ files, this adds significant latency.
+2. The values are computed once and **cannot be changed** without reloading the module, making tests brittle (`monkeypatch.setenv` after import has no effect on the cached `_ACCOUNT_ID`).
+3. An unreachable STS endpoint (e.g. inside a VPC without the endpoint, or offline) silently falls back to `""`, producing subtly wrong bucket names rather than an explicit error.
+
+#### Solution
+
+Refactor to lazy initialisation. Replace the module-level constants with functions that compute and cache on first call:
+
+```python
+import functools
+
+@functools.lru_cache(maxsize=1)
+def _get_account_id() -> str:
+    acct = os.getenv("AWS_ACCOUNT_ID", "")
+    if acct:
+        return acct
+    try:
+        import boto3
+        return boto3.client("sts").get_caller_identity()["Account"]
+    except Exception:
+        return ""
+
+@functools.lru_cache(maxsize=1)
+def _get_domain() -> dict[str, str]:
+    # ... same logic, but only runs when first called
+```
+
+This preserves the current behaviour for jobs (which call `get_config()` early) but eliminates the import-time side effect, allowing tests to patch environment variables before the first call.
+
+Also expose a `clear_cache()` or `_reset()` helper for tests:
+
+```python
+def _reset():
+    _get_account_id.cache_clear()
+    _get_domain.cache_clear()
+```
+
+---
+
+### P0-ENG-02- `write_iceberg()` `sort_by` Parameter Does Not Sort Data
+
+| Field | Value |
+|---|---|
+| **Severity** | MEDIUM |
+| **Status** | open |
+| **Files** | `src/core/io/writers.py` |
+
+#### Problem
+
+The `sort_by` parameter in `write_iceberg()` is implemented as:
+
+```python
+if sort_by:
+    writer = writer.tableProperty("write.sort-order", ",".join(sort_by))
+```
+
+`writer.tableProperty()` sets an Iceberg table property on the metadata, it does **not** sort the data being written. The Spark `writeTo` API does not support specifying sort order per-write through `tableProperty`. The actual data files will remain unsorted regardless of this setting.
+
+To achieve sorted writes, the data must either be sorted in the DataFrame before writing, or the table's sort order must be defined via DDL (`ALTER TABLE ... WRITE ORDERED BY ...`), which causes Iceberg to sort internally on subsequent writes.
+
+#### Solution
+
+Option A (recommended for simplicity): Sort the DataFrame before writing:
+
+```python
+if sort_by:
+    df = df.sortWithinPartitions(*sort_by) if partition_by else df.orderBy(*sort_by)
+```
+
+Option B (recommended for Iceberg-native sort): Set the sort order at table creation time via `create_table_if_not_exists()` in `catalog.py` and remove `sort_by` from the write function. Table-level sort order is then respected automatically by Iceberg on every write.
+
+Document in the function docstring which approach is used and why.
+
+---
+
+### P0-ENG-04- No Schema Validation in `DataQualityChecker`
+
+| Field | Value |
+|---|---|
+| **Severity** | LOW |
+| **Status** | open |
+| **Files** | `src/core/quality/checks.py` |
+
+#### Problem
+
+The `DataQualityChecker` supports null checks, uniqueness, value sets, and range validations, but it has no check for **schema conformance**: verifying that the DataFrame has the expected columns with the expected types. Schema drift is one of the most common causes of silent data corruption in data pipelines, and a schema validation check is fundamental for a platform template.
+
+#### Solution
+
+Add a `schema_match()` method:
+
+```python
+def schema_match(
+    self,
+    expected: dict[str, str],
+    allow_extra_columns: bool = True,
+) -> DataQualityChecker:
+    """Assert that the DataFrame schema matches the expected column→type mapping.
+
+    Parameters
+    ----------
+    expected:
+        Dict of {column_name: spark_type_string}, e.g. {"id": "string", "amount": "decimal(18,2)"}.
+    allow_extra_columns:
+        If False, fail when the DataFrame has columns not in `expected`.
+    """
+    self._checks.append(("schema_match", (expected, allow_extra_columns)))
+    return self
+```
+
+Implement the check in `run()`:
+
+```python
+elif check_type == "schema_match":
+    expected, allow_extra = params
+    actual = {f.name: f.dataType.simpleString() for f in self._df.schema.fields}
+    missing = {k: v for k, v in expected.items() if k not in actual}
+    type_mismatches = {k: (expected[k], actual[k]) for k in expected if k in actual and actual[k] != expected[k]}
+    extra = set(actual) - set(expected) if not allow_extra else set()
+    passed = not missing and not type_mismatches and not extra
+    detail_parts = []
+    if missing:
+        detail_parts.append(f"missing: {list(missing.keys())}")
+    if type_mismatches:
+        detail_parts.append(f"type mismatches: {type_mismatches}")
+    if extra:
+        detail_parts.append(f"unexpected: {list(extra)}")
+    result = CheckResult(
+        name="schema_match", passed=passed, detail="; ".join(detail_parts)
+    )
+```
+
+---
+
+### P0-ENG-05- Test Coverage: No SparkSession Fixture or Core Module Tests
+
+| Field | Value |
+|---|---|
+| **Severity** | LOW |
+| **Status** | open |
+| **Files** | `tests/conftest.py`, `tests/` |
+
+#### Problem
+
+The test suite has no SparkSession fixture and only tests `config` and `logging`. The core modules that handle actual data - `readers.py`, `writers.py`, `quality/checks.py`, `iceberg/catalog.py` - have **zero unit tests**. The `conftest.py` file is empty.
+
+The `test_jobs.py` file is excellent for structural validation (syntax, imports, main guard), but it does not test any job logic.
+
+For a production template used by large organisations, the test scaffolding should demonstrate how to test data transformations so that teams copying the template inherit a healthy testing culture.
+
+#### Solution
+
+1. **Add a SparkSession fixture** to `conftest.py`:
+
+   ```python
+   import pytest
+   from pyspark.sql import SparkSession
+
+   @pytest.fixture(scope="session")
+   def spark():
+       session = (
+           SparkSession.builder
+           .master("local[1]")
+           .appName("unit-tests")
+           .config("spark.sql.shuffle.partitions", "1")
+           .config("spark.ui.enabled", "false")
+           .getOrCreate()
+       )
+       yield session
+       session.stop()
+   ```
+
+2. **Add tests for `quality/checks.py`**:
+   - Test each check type (not_null, unique, value_in_set, min_value, max_value, row_count_min).
+   - Test `assert_all_passed()` raises `DataQualityError` on failure.
+
+3. **Add basic tests for `readers.py` and `writers.py`**:
+   - Write and read Parquet in a temp directory.
+   - Test `write_iceberg` mode validation and partition handling.
+
+4. **Add test for `catalog.py`**:
+   - Test DDL generation (verify the SQL string produced by `create_table_if_not_exists`).
+
+5. **Document** the test structure in a short `tests/README.md` to guide teams on what and how to test.
 
 ---
 

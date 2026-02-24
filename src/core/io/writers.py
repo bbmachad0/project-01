@@ -97,7 +97,9 @@ def merge_iceberg(
     insert_cols = ", ".join(columns)
     insert_vals = ", ".join(f"s.{c}" for c in columns)
 
-    sql = f"""
+    # nosec B608 - all identifiers (table name, column names, temp view) are
+    # controlled by library code or the DataFrame schema, not user-supplied input.
+    sql = f"""  # nosec B608
         MERGE INTO {target_table} AS t
         USING {temp_view} AS s
         ON t.{merge_key} = s.{merge_key}

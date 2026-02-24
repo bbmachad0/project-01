@@ -115,7 +115,9 @@ def list_snapshots(
     table: str,
 ) -> list:
     """Return snapshot metadata as a list of Row objects."""
-    return spark.sql(f"SELECT * FROM {table}.snapshots").collect()
+    # nosec B608 - `table` is always a fully-qualified Glue Catalog path
+    # (e.g. glue_catalog.db.table) constructed by library code, never user input.
+    return spark.sql(f"SELECT * FROM {table}.snapshots").collect()  # nosec B608
 
 
 def drop_table(

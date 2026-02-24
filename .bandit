@@ -1,0 +1,20 @@
+[bandit]
+# ─── Bandit SAST Baseline Configuration ──────────────────────────
+# Adjust severity/confidence thresholds and per-test skips.
+# All suppressions are documented with the rationale.
+#
+# Docs: https://bandit.readthedocs.io/en/latest/config.html
+
+# Scan medium+ severity, medium+ confidence (same thresholds as CI flags).
+# This eliminates low-confidence noise while catching real issues.
+# Note: the -ll -ii CLI flags take precedence when supplied explicitly.
+
+# Per-test skips: only suppress tests that are provably false positives
+# for this codebase.
+skips =
+    # B608: "Possible SQL injection vector through string-based query construction"
+    # All spark.sql() calls in core/iceberg/catalog.py and core/io/writers.py use
+    # Iceberg system table names and DataFrame column names as identifiers.
+    # These identifiers are always controlled by library code, never user input.
+    # Inline # nosec B608 annotations are also present on each affected line.
+    B608

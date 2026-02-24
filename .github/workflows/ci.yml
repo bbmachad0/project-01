@@ -227,13 +227,28 @@ jobs:
         if: needs.changes.outputs.core == 'true'
         run: pip-audit
 
+      # ─ SBOM: Software Bill of Materials ──────────────────────────
+      - name: Generate SBOM
+        if: needs.changes.outputs.core == 'true'
+        run: |
+          pip install --quiet cyclonedx-bom
+          cyclonedx-py environment --of json --output-file sbom.json
+
+      - name: Upload SBOM artefact
+        if: needs.changes.outputs.core == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 90
+
       # ─ SAST: Python static analysis ──────────────────────────────
       - name: bandit (Python SAST)
         if: needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true'
-        run: bandit -r src/ -ll -ii --exit-zero
+        run: bandit -r src/ -ll -ii
         # -ll = medium+ severity, -ii = medium+ confidence
-        # --exit-zero reports findings without failing the pipeline.
-        # Remove --exit-zero once a clean baseline is established.
+        # Accepted false positives are suppressed via .bandit (skip=B608)
+        # and inline # nosec annotations. Failing this step blocks the PR.
 
       # ─ IaC: Terraform + Dockerfile misconfiguration ──────────────
       - name: checkov (Terraform IaC)
@@ -241,14 +256,14 @@ jobs:
         run: |
           checkov -d infrastructure/ \
             --framework terraform \
-            --quiet \
-            --soft-fail
-        # --soft-fail reports findings without failing the pipeline.
-        # Remove --soft-fail once a clean baseline is established.
+            --config-file .checkov.yml \
+            --quiet
+        # Accepted findings suppressed in .checkov.yml with documented rationale.
+        # Failing this step blocks the PR.
 
       - name: checkov (Dockerfile)
         run: |
           checkov -f Dockerfile \
             --framework dockerfile \
-            --quiet \
-            --soft-fail
+            --config-file .checkov.yml \
+            --quiet

@@ -1,6 +1,7 @@
 """test02 - job01: Ingest raw events e escreve em refined."""
 
 from core.config.settings import get_config
+from core.io.readers import read_iceberg
 from core.io.writers import write_iceberg
 from core.logging.logger import get_logger
 from core.spark.session import get_spark
@@ -14,9 +15,10 @@ def main() -> None:
 
     log.info("Starting job01")
 
-    df = spark.read.parquet(f"s3://{cfg['s3_raw_bucket']}/t2/events/")
-
-    # ... transformações ...
+    df = read_iceberg(
+        spark=spark,
+        table=f"glue_catalog.{cfg['iceberg_database_raw']}.events",
+    )
 
     write_iceberg(
         df=df,

@@ -1,0 +1,49 @@
+# ─── Dependabot ───────────────────────────────────────────────────
+# Automated dependency update PRs for Python packages and GitHub Actions.
+# Keeps supply chain risk low by surfacing outdated / vulnerable versions
+# as small, reviewable PRs rather than accumulating drift.
+
+version: 2
+
+updates:
+  # ── Python dependencies ──────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    commit-message:
+      prefix: "chore(deps)"
+    # Group minor + patch updates to reduce PR noise.
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # ── GitHub Actions ───────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "chore(actions)"
+    # Group all Actions updates to reduce noise - each update is already
+    # validated by SHA pinning so batching is safe.
+    groups:
+      github-actions:
+        patterns:
+          - "*"

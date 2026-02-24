@@ -1,0 +1,87 @@
+# ─── Checkov Suppression Baseline ────────────────────────────────
+# Accepted findings that do not represent real risk for this project.
+# Each entry is documented with the rationale so future reviewers
+# understand WHY the check is suppressed rather than just that it is.
+#
+# IMPORTANT: Review this file quarterly. If a suppressed check becomes
+# relevant (e.g. cross-region replication is required for DR), remove
+# the skip and address it in code.
+#
+# Format: https://www.checkov.io/2.Basics/CLI%20Command%20Reference.html
+
+# ─── Retained findings (not suppressed) ──────────────────────────
+# All other checks run and MUST pass. The suppressions below are
+# intentional design decisions, not shortcuts.
+
+skip-check:
+  # ── KMS key policy ────────────────────────────────────────────
+  # KMS resource-based policies require resources=["*"] by AWS design.
+  # The key itself is the implicit resource; principal and conditions
+  # enforce scope instead.  Inline checkov:skip also added in kms.tf.
+  # Reference: https://docs.aws.amazon.com/kms/latest/developerguide/key-policies.html
+  - CKV_AWS_109
+  - CKV_AWS_111
+  - CKV_AWS_356
+
+  # ── EC2 Describe actions ──────────────────────────────────────
+  # EC2 List-category Describe actions do not support resource-level
+  # ARN scoping. resources=["*"] is required by AWS.
+  # Reference: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
+  # Inline comment also added in modules/iam_glue_job/main.tf.
+  - CKV_AWS_355
+
+  # ── CloudWatch log retention ──────────────────────────────────
+  # 90-day retention is the accepted policy for this domain.
+  # Operational logs (VPC Flow, SFN execution) are reviewed within
+  # 30 days in practice. Upgrade to 365+ if compliance requires it.
+  - CKV_AWS_338
+
+  # ── Glue security configuration ───────────────────────────────
+  # All Glue jobs run inside a VPC with private subnets. S3 and
+  # CloudWatch Logs are already encrypted with a domain KMS CMK.
+  # A Glue SecurityConfiguration adds a separate local disk
+  # encryption layer that provides marginal value at extra cost.
+  # Revisit if data-at-rest requirements change.
+  - CKV_AWS_195
+
+  # ── S3: cross-region replication ─────────────────────────────
+  # This is a single-region deployment by design. DR and replication
+  # strategy is owned by the organisation's platform team. Accepted
+  # risk until a multi-region DR requirement is defined.
+  - CKV_AWS_144
+
+  # ── S3: event notifications ───────────────────────────────────
+  # S3 event notifications are not required for this data pipeline.
+  # Processing is triggered by Step Functions schedules, not S3 events.
+  - CKV2_AWS_62
+
+  # ── S3: access-logs bucket versioning ────────────────────────
+  # The logs bucket has versioning intentionally disabled.
+  # Enabling versioning on an S3 access-logging target would cause
+  # every log delivery to create a version, generating unbounded
+  # version metadata costs.
+  - CKV_AWS_21
+
+  # ── VPC: default security group ──────────────────────────────
+  # Checkov flags the unmanaged default security group. This project
+  # does not use the default SG - all Glue jobs use a dedicated SG.
+  # The default SG is managed at the AWS Organizations level.
+  - CKV2_AWS_12
+
+  # ── VPC: security group not attached ─────────────────────────
+  # Checkov CKV2_AWS_5 fires when a security group resource has no
+  # direct attachment in the same Terraform file. The Glue SG is
+  # attached via the Glue Network Connection, not a direct resource
+  # argument, so this is a false positive.
+  - CKV2_AWS_5
+
+  # ── Step Functions: X-Ray tracing ───────────────────────────
+  # X-Ray tracing is not enabled. Observability for pipeline
+  # execution uses CloudWatch Logs + EventBridge (see P0-10).
+  # Enable if distributed tracing becomes a requirement.
+  - CKV_AWS_284
+
+  # ── Dockerfile: HEALTHCHECK ──────────────────────────────────
+  # This is a local development image (mirrors Glue 5.1).
+  # It is not deployed as a service; HEALTHCHECK is not applicable.
+  - CKV_DOCKER_2

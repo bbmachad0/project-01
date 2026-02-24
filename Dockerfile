@@ -48,6 +48,13 @@ COPY Makefile ./
 # Install the project in editable mode
 RUN pip install --no-cache-dir -e .
 
+# ── Non-root user ────────────────────────────────────────────────
+# Run as an unprivileged user in line with CIS Docker Benchmark 4.1
+# and general container security best practices.
+RUN useradd --uid 1001 --gid 0 --no-create-home --shell /bin/bash appuser \
+    && chown -R appuser /app
+USER appuser
+
 # ── Environment defaults ─────────────────────────────────────────
 ENV ENV=local
 ENV PYTHONUNBUFFERED=1

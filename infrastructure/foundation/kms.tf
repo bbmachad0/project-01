@@ -9,6 +9,13 @@
 # to use the key even if their IAM policies permit it.
 
 data "aws_iam_policy_document" "kms_key_policy" {
+  # checkov:skip=CKV_AWS_109: KMS resource-based policies must use resources=["*"] - AWS
+  # does not support ARN-scoped resources within key policies. The key itself IS the resource.
+  # checkov:skip=CKV_AWS_111: Same rationale - kms:* on resources=["*"] is the required
+  # root-admin statement mandated by AWS to prevent permanent key lockout.
+  # checkov:skip=CKV_AWS_356: KMS key policies require resources=["*"]; the scope is
+  # enforced by the principal (root ARN) and conditions, not resource ARNs.
+  # Reference: https://docs.aws.amazon.com/kms/latest/developerguide/key-policies.html
 
   # Root account full control - mandatory for key management and
   # to allow IAM identity-based policies to delegate key usage.

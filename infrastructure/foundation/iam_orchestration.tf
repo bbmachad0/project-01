@@ -26,19 +26,36 @@ data "aws_iam_policy_document" "sfn_permissions" {
     ]
   }
 
-  # CloudWatch Logs - Step Functions execution logs
+  # CloudWatch Logs - Step Functions execution logs (log group operations)
+  # Scoped to SFN log groups created by this domain only.
   statement {
-    sid = "CloudWatchLogs"
+    sid = "CloudWatchLogsGroups"
+    actions = [
+      "logs:DescribeLogGroups",
+    ]
+    resources = [
+      "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/states/${var.domain_abbr}-*",
+    ]
+  }
+
+  # CloudWatch Logs - Step Functions log delivery management
+  # Log Delivery API calls do NOT support resource-level ARN restrictions in IAM.
+  # AWS requires resources = ["*"] for these actions - see:
+  # https://docs.aws.amazon.com/step-functions/latest/dg/cw-logs.html
+  # PutResourcePolicy and DeleteLogDelivery are one-time setup/teardown operations
+  # performed by Terraform, not runtime requirements. They are intentionally omitted
+  # from this role to minimise the blast radius of a compromised execution.
+  statement {
+    sid = "CloudWatchLogsDelivery"
     actions = [
       "logs:CreateLogDelivery",
       "logs:GetLogDelivery",
       "logs:UpdateLogDelivery",
-      "logs:DeleteLogDelivery",
       "logs:ListLogDeliveries",
-      "logs:PutResourcePolicy",
       "logs:DescribeResourcePolicies",
-      "logs:DescribeLogGroups",
     ]
+    # tfsec:ignore:AWS097 - Log Delivery actions do not support resource-level ARN
+    # restrictions. This wildcard is intentional and required by AWS.
     resources = ["*"]
   }
 }
