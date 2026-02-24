@@ -228,11 +228,18 @@ jobs:
         run: pip-audit
 
       # ─ SBOM: Software Bill of Materials ──────────────────────────
+      # cyclonedx-bom and checkov declare conflicting version ranges for
+      # cyclonedx-python-lib. Installing cyclonedx-bom into the shared
+      # environment upgrades that library and removes the Tool symbol that
+      # checkov imports, causing an ImportError at runtime.
+      # Fix: run cyclonedx-bom inside a dedicated throwaway venv so its
+      # dependency resolution never touches the checkov installation.
       - name: Generate SBOM
         if: needs.changes.outputs.core == 'true'
         run: |
-          pip install --quiet cyclonedx-bom
-          cyclonedx-py environment --of json --output-file sbom.json
+          python -m venv /tmp/sbom-venv
+          /tmp/sbom-venv/bin/pip install --quiet cyclonedx-bom
+          /tmp/sbom-venv/bin/cyclonedx-py environment --of json --output-file sbom.json
 
       - name: Upload SBOM artefact
         if: needs.changes.outputs.core == 'true'
