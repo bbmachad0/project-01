@@ -77,7 +77,7 @@ make test
 
 ## Removing a Project
 
-Projects are decommissioned through the same CI/CD pipeline that creates them —
+Projects are decommissioned through the same CI/CD pipeline that creates them  -
 no manual `terraform destroy` required.
 
 ### Steps

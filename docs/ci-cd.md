@@ -160,7 +160,7 @@ minimal set of projects that need re-applying:
 
 | What changed | Projects deployed |
 |---|---|
-| `src/jobs/**` or `pyproject.toml` | **All**— new scripts or dependency changes affect every job |
+| `src/jobs/**` or `pyproject.toml` | **All** - new scripts or dependency changes affect every job |
 | `src/jobs/**` | **All**- scripts are synced globally |
 | `infrastructure/baseline/**`, `modules/**`, `environments/**` | **All**- shared infra may affect any project |
 | Only `infrastructure/projects/sales/` | **Only `sales`**- `git diff` scopes to changed dirs |
@@ -170,7 +170,7 @@ minimal set of projects that need re-applying:
 
 ## Removing a Project
 
-The CI/CD pipeline is the **single source of truth** for all cloud mutations —
+The CI/CD pipeline is the **single source of truth** for all cloud mutations  -
 including resource teardown. When a project directory is deleted from the repo,
 the `destroy-projects` job handles decommissioning automatically.
 
