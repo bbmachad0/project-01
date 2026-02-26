@@ -40,7 +40,7 @@ All versions are defined as constants at the top of `bootstrap.sh`.
 3. **Virtual environment** - `.venv` created via UV with Python 3.11.
 4. **Project dependencies** - `pip install -e ".[dev]"` (includes PySpark, boto3, pytest, ruff, mypy, build).
 5. **`.env` file** - generated from `domain.json` with local defaults (skipped if already exists).
-6. **Verification** - core library imports are tested, linter runs a quick check.
+6. **Verification** - `dp_foundation` library imports are tested, linter runs a quick check.
 
 ---
 
@@ -199,8 +199,7 @@ See [docs/ci-cd.md](../docs/ci-cd.md) for the full OIDC trust policy.
 source .venv/bin/activate
 
 make test          # Unit tests
-make lint          # Linters (ruff, mypy)
-make build         # Build the core wheel
+make lint          # Linters (ruff)
 ```
 
 You are ready to develop. See [docs/](../docs/) for detailed documentation.

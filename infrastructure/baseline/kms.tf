@@ -1,4 +1,4 @@
-# ─── Foundation - KMS: Data Lake Encryption ──────────────────────
+# ─── Baseline - KMS: Data Lake Encryption ────────────────────────
 # Customer-managed key for S3 bucket encryption.
 # Enables custom rotation policy, granular key policies, and
 # cross-account access control.

@@ -5,13 +5,13 @@
 # Adding a new project requires no changes here - it is picked up automatically.
 #
 # Selective deployment:
-#   - Foundation or shared modules changed → deploy ALL projects (they may be affected)
+#   - Baseline or shared modules changed → deploy ALL projects (they may be affected)
 #   - Only project-specific files changed  → deploy ONLY the changed projects
-#   - src/core or src/jobs changed         → deploy ALL projects (new wheel/scripts)
+#   - src/jobs or pyproject.toml changed   → deploy ALL projects (new scripts)
 #
 # Deploy order:
-#   1. Foundation          (S3, IAM, Glue databases, VPC)
-#   2. Artifacts           (wheel + job scripts to S3)
+#   1. Baseline            (S3, IAM, Glue databases, VPC)
+#   2. Artifacts           (foundation wheel from GitHub Releases + job scripts to S3)
 #   3. Destroy Projects    (removed projects- terraform destroy from previous state)
 #   4. Deploy Projects     (new/changed projects- terraform apply, in parallel)
 
@@ -36,6 +36,9 @@ env:
   PYTHON_VERSION: "3.11"
   TERRAFORM_VERSION: "1.14.5"
   ENV: ${{ inputs.environment }}
+  # Foundation library version - update when upgrading dp_foundation.
+  FOUNDATION_VERSION: "1.0.0"
+  FOUNDATION_REPO: "ORG/org-data-platform-foundation"
   # Injected into every Terraform apply as resource tags (for auditability).
   TF_VAR_git_sha:     ${{ github.sha }}
   TF_VAR_deployed_by: ${{ github.actor }}
@@ -47,9 +50,9 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      core:            ${{ steps.filter.outputs.core }}
+      python:          ${{ steps.filter.outputs.python }}
       jobs:            ${{ steps.filter.outputs.jobs }}
-      foundation_infra: ${{ steps.filter.outputs.foundation_infra }}
+      baseline_infra:  ${{ steps.filter.outputs.baseline_infra }}
       projects_infra:  ${{ steps.filter.outputs.projects_infra }}
       aws_region:      ${{ steps.domain.outputs.aws_region }}
     steps:
@@ -66,13 +69,14 @@ jobs:
         id: filter
         with:
           filters: |
-            core:
-              - 'src/core/**'
+            python:
               - 'pyproject.toml'
+              - 'src/jobs/**'
+              - 'tests/**'
             jobs:
               - 'src/jobs/**'
-            foundation_infra:
-              - 'infrastructure/foundation/**'
+            baseline_infra:
+              - 'infrastructure/baseline/**'
               - 'infrastructure/environments/**'
               - 'infrastructure/modules/**'
               - 'setup/domain.json'
@@ -81,16 +85,16 @@ jobs:
 
   # ── Discover which projects to deploy ────────────────────────────
   # Logic:
-  #   - src changes (core/jobs)         → ALL projects (new wheel/scripts)
-  #   - foundation/modules/envs changed → ALL projects (shared infra changed)
-  #   - only projects/** changed        → ONLY the projects whose files changed
+  #   - src/jobs or pyproject.toml changed → ALL projects (new scripts / deps)
+  #   - baseline/modules/envs changed      → ALL projects (shared infra changed)
+  #   - only projects/** changed           → ONLY the projects whose files changed
   discover:
     name: Discover Projects
     needs: changes
     if: |
-      needs.changes.outputs.core == 'true' ||
+      needs.changes.outputs.python == 'true' ||
       needs.changes.outputs.jobs == 'true' ||
-      needs.changes.outputs.foundation_infra == 'true' ||
+      needs.changes.outputs.baseline_infra == 'true' ||
       needs.changes.outputs.projects_infra == 'true'
     runs-on: ubuntu-latest
     outputs:
@@ -104,7 +108,7 @@ jobs:
       - name: Resolve project matrix
         id: list
         env:
-          ALL_PROJECTS:    ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.jobs == 'true' || needs.changes.outputs.foundation_infra == 'true' }}
+          ALL_PROJECTS:    ${{ needs.changes.outputs.python == 'true' || needs.changes.outputs.jobs == 'true' || needs.changes.outputs.baseline_infra == 'true' }}
           PROJECTS_CHANGED: ${{ needs.changes.outputs.projects_infra }}
         run: |
           # All known projects
@@ -151,14 +155,14 @@ jobs:
           MATRIX=$(echo "$REMOVED" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "removed_matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
-  # ── Deploy Foundation ────────────────────────────────────────────
-  foundation:
-    name: Deploy Foundation
+  # ── Deploy Baseline ──────────────────────────────────────────
+  baseline:
+    name: Deploy Baseline
     needs: changes
     if: |
-      needs.changes.outputs.core == 'true' ||
+      needs.changes.outputs.python == 'true' ||
       needs.changes.outputs.jobs == 'true' ||
-      needs.changes.outputs.foundation_infra == 'true' ||
+      needs.changes.outputs.baseline_infra == 'true' ||
       needs.changes.outputs.projects_infra == 'true'
     runs-on: ubuntu-latest
     outputs:
@@ -192,20 +196,20 @@ jobs:
             -backend-config="region=${{ needs.changes.outputs.aws_region }}" \
             -backend-config="use_lockfile=true"
 
-      - name: Terraform Apply - Foundation
+      - name: Terraform Apply - Baseline
         working-directory: infrastructure/environments/${{ env.ENV }}
         run: |
           terraform plan -out=tfplan -input=false
           terraform apply -auto-approve tfplan
 
-  # ── Upload Artifacts (wheel + scripts) ──────────────────────────
+  # ── Upload Artifacts (foundation wheel + job scripts to S3) ────
   artifacts:
     name: Upload Artifacts
-    needs: [changes, foundation]
+    needs: [changes, baseline]
     if: |
-      needs.changes.outputs.core == 'true' ||
+      needs.changes.outputs.python == 'true' ||
       needs.changes.outputs.jobs == 'true' ||
-      needs.changes.outputs.foundation_infra == 'true' ||
+      needs.changes.outputs.baseline_infra == 'true' ||
       needs.changes.outputs.projects_infra == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -224,36 +228,27 @@ jobs:
           echo "::add-mask::${ACCOUNT_ID}"
           echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Build and upload wheel
-        if: needs.changes.outputs.core == 'true'
+      - name: Download and upload foundation wheel
         run: |
-          SHORT_SHA="${GITHUB_SHA::8}"
-          VERSION="1.0.0+${SHORT_SHA}"
           ABBR=$(jq -r .domain_abbr setup/domain.json)
+          CC=$(jq -r .country_code setup/domain.json)
           ACCOUNT_ID="${{ steps.aws.outputs.account_id }}"
-          pip install build
-          # Inject version without permanently modifying the working tree.
-          # The trap restores __init__.py on exit (success or failure).
-          trap 'git checkout -- src/core/__init__.py' EXIT SIGINT SIGTERM
-          sed -i "s/^__version__ = .*/__version__ = \"${VERSION}\"/" src/core/__init__.py
-          python -m build --wheel --outdir dist/
-          WHEEL=$(ls dist/*.whl | head -1)
-          # Upload versioned wheel for auditability and rollback.
-          aws s3 cp "$WHEEL" \
-            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/wheels/${WHEEL##*/}"
+          WHEEL_NAME="data_platform_foundation-${{ env.FOUNDATION_VERSION }}-py3-none-any.whl"
+          # Download the foundation wheel from GitHub Releases
+          curl -fsSL -o "${WHEEL_NAME}" \
+            "https://github.com/${{ env.FOUNDATION_REPO }}/releases/download/v${{ env.FOUNDATION_VERSION }}/${WHEEL_NAME}"
+          # Upload to the domain's S3 artifacts bucket
+          aws s3 cp "${WHEEL_NAME}" \
+            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${CC}-${{ env.ENV }}/wheels/${WHEEL_NAME}"
 
       - name: Upload job scripts
         if: needs.changes.outputs.jobs == 'true'
         run: |
           ABBR=$(jq -r .domain_abbr setup/domain.json)
+          CC=$(jq -r .country_code setup/domain.json)
           ACCOUNT_ID="${{ steps.aws.outputs.account_id }}"
           aws s3 sync src/jobs/ \
-            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${{ env.ENV }}/jobs/" \
+            "s3://${ABBR}-artifacts-${ACCOUNT_ID}-${CC}-${{ env.ENV }}/jobs/" \
             --delete --exact-timestamps
 
   # ── Destroy Removed Projects ───────────────────────────────────
@@ -264,7 +259,7 @@ jobs:
   # source of truth for ALL cloud mutations- including teardown.
   destroy-projects:
     name: "Destroy › ${{ matrix.project }}"
-    needs: [changes, foundation, discover]
+    needs: [changes, baseline, discover]
     if: needs.discover.outputs.removed_matrix != '[]' && needs.discover.outputs.removed_matrix != ''
     strategy:
       matrix:
@@ -294,11 +289,11 @@ jobs:
           echo "::add-mask::${ACCOUNT_ID}"
           echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
 
-      - name: Read project slug from restored files
+      - name: Read project name from restored files
         id: project
         run: |
-          SLUG=$(jq -r .slug "infrastructure/projects/${{ matrix.project }}/project.json")
-          echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+          SLUG=$(jq -r .name "infrastructure/projects/${{ matrix.project }}/project.json")
+          echo "name=${SLUG}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
@@ -310,21 +305,21 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=tfstate-${{ steps.aws.outputs.account_id }}" \
-            -backend-config="key=projects/${{ steps.project.outputs.slug }}/terraform.tfstate" \
+            -backend-config="key=projects/${{ steps.project.outputs.name }}/terraform.tfstate" \
             -backend-config="region=${{ needs.changes.outputs.aws_region }}" \
             -backend-config="use_lockfile=true"
 
       - name: Terraform Destroy
         working-directory: infrastructure/projects/${{ matrix.project }}
         run: |
-          echo "::warning::Destroying all resources for project '${{ matrix.project }}' (slug: ${{ steps.project.outputs.slug }})"
+          echo "::warning::Destroying all resources for project '${{ matrix.project }}' (${{ steps.project.outputs.name }})"
           terraform plan -destroy -var="environment=${{ env.ENV }}" -out=tfplan -input=false
           terraform apply -auto-approve tfplan
 
   # ── Deploy Projects (selective, parallel) ────────────────────────
   deploy-projects:
     name: "Deploy › ${{ matrix.project }}"
-    needs: [changes, foundation, artifacts, discover]
+    needs: [changes, baseline, artifacts, discover]
     if: needs.discover.outputs.matrix != '[]' && needs.discover.outputs.matrix != ''
     strategy:
       matrix:
@@ -347,11 +342,11 @@ jobs:
           echo "::add-mask::${ACCOUNT_ID}"
           echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
 
-      - name: Read project slug
+      - name: Read project name
         id: project
         run: |
-          SLUG=$(jq -r .slug infrastructure/projects/${{ matrix.project }}/project.json)
-          echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+          SLUG=$(jq -r .name infrastructure/projects/${{ matrix.project }}/project.json)
+          echo "name=${SLUG}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
@@ -363,7 +358,7 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=tfstate-${{ steps.aws.outputs.account_id }}" \
-            -backend-config="key=projects/${{ steps.project.outputs.slug }}/terraform.tfstate" \
+            -backend-config="key=projects/${{ steps.project.outputs.name }}/terraform.tfstate" \
             -backend-config="region=${{ needs.changes.outputs.aws_region }}" \
             -backend-config="use_lockfile=true"
 

@@ -1,4 +1,4 @@
-# ─── Foundation - VPC ────────────────────────────────────────────
+# ─── Baseline - VPC ──────────────────────────────────────────────
 # Dedicated VPC for Glue jobs.
 # Traffic to S3 and Glue API never leaves AWS (VPC endpoints in subnets.tf).
 

@@ -1,8 +1,8 @@
 # ─── Project Stack - Variables ───────────────────────────────────
 # Only ONE variable is needed here. Everything else (buckets, databases,
-# IAM ARNs, etc.) is read automatically from the foundation remote state.
+# IAM ARNs, etc.) is read automatically from the baseline remote state.
 #
-# The project slug lives in project.json (local.config.slug), so you
+# The project name lives in project.json (local.config.name), so you
 # do NOT need to pass it as a Terraform variable.
 # ─────────────────────────────────────────────────────────────────
 
@@ -29,4 +29,10 @@ variable "repository" {
   description = "Source repository. Injected via TF_VAR_repository."
   type        = string
   default     = "local"
+}
+
+variable "wheel_version" {
+  description = "Version of the data-platform-foundation wheel (e.g. 1.0.0). Injected via TF_VAR_wheel_version in CI."
+  type        = string
+  default     = "1.0.0"
 }

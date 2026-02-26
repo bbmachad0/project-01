@@ -63,17 +63,18 @@ variable "repository" {
   default     = "local"
 }
 
-# ─── Foundation Infrastructure ─────────────────────────────────────────
+# ─── Baseline Infrastructure ───────────────────────────────────────
 
-module "foundation" {
-  source      = "../../foundation"
-  domain_name = local.domain.domain_name
-  domain_abbr = local.domain.domain_abbr
-  env         = local.env
-  aws_region  = local.domain.aws_region
-  vpc_cidr    = "10.30.0.0/16"
+module "baseline" {
+  source       = "../../baseline"
+  domain_name  = local.domain.domain_name
+  domain_abbr  = local.domain.domain_abbr
+  country_code = local.domain.country_code
+  env          = local.env
+  aws_region   = local.domain.aws_region
+  vpc_cidr     = "10.30.0.0/16"
 }
 
 # Projects are now independent Terraform root modules under
 # infrastructure/projects/<name>/ - each has its own remote state.
-# See docs/adding-a-job.md or run: make new-project NAME=<name> SLUG=<id>
+# See docs/adding-a-job.md or run: make new-project NAME=<name>

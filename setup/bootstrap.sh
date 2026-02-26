@@ -320,7 +320,7 @@ run_docker_bootstrap() {
     ok "Docker image built"
 
     info "Verifying image ..."
-    docker run --rm "${domain_abbr}-local:latest" python3 -c "import core; print('core importable')"
+    docker run --rm "${domain_abbr}-local:latest" python3 -c "import dp_foundation; print('dp_foundation importable')"
     ok "Docker environment ready"
     ok "Run jobs with:  make docker-run JOB=sales/job_daily_sales.py"
 }
@@ -329,10 +329,10 @@ run_docker_bootstrap() {
 
 verify_installation() {
     info "Verifying installation ..."
-    python3 -c "from core.spark.session import get_spark; print('spark_session OK')"
-    python3 -c "from core.config.settings import get_config; print('config OK')"
-    python3 -c "from core.logging.logger import get_logger; print('logging OK')"
-    ok "Core library imports verified"
+    python3 -c "from dp_foundation.spark.session import get_spark; print('spark_session OK')"
+    python3 -c "from dp_foundation.config.settings import get_config; print('config OK')"
+    python3 -c "from dp_foundation.logging.logger import get_logger; print('logging OK')"
+    ok "Foundation library imports verified"
 }
 
 run_quick_checks() {

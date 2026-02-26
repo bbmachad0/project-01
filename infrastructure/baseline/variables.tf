@@ -1,4 +1,4 @@
-# ─── Foundation - Variables & Locals ─────────────────────────────
+# ─── Baseline - Variables & Locals ───────────────────────────────
 
 # ─── Data Sources ────────────────────────────────────────────────
 
@@ -13,7 +13,12 @@ variable "domain_name" {
 }
 
 variable "domain_abbr" {
-  description = "Short domain abbreviation (e.g. nl). Used as prefix for all resource names."
+  description = "Short domain abbreviation (e.g. f01). Used as prefix for all resource names."
+  type        = string
+}
+
+variable "country_code" {
+  description = "ISO 3166-1 alpha-2 country code (e.g. de, br). Used in S3 bucket and Glue database naming for multi-region Athena queries."
   type        = string
 }
 
@@ -35,12 +40,14 @@ variable "vpc_cidr" {
 
 locals {
   common_tags = {
-    domain      = var.domain_name
-    domain_abbr = var.domain_abbr
-    env         = var.env
-    managed_by  = "terraform"
+    domain       = var.domain_name
+    domain_abbr  = var.domain_abbr
+    country_code = var.country_code
+    env          = var.env
+    managed_by   = "terraform"
   }
 
   # Normalised abbreviation for Glue database naming (hyphens → underscores)
-  db_prefix = replace(var.domain_abbr, "-", "_")
+  # Pattern: {abbr}_{country_code}_{layer}  e.g. f01_de_raw
+  db_prefix = "${replace(var.domain_abbr, "-", "_")}_${var.country_code}"
 }

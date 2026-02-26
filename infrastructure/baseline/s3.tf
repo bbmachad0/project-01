@@ -1,8 +1,8 @@
-# ─── Foundation - S3 Buckets ─────────────────────────────────────
+# ─── Baseline - S3 Buckets ─────────────────────────────────────
 # Data-lake layer buckets + artifacts bucket for the domain.
 #
-# Naming convention:  {domain_abbr}-{purpose}-{account_id}-{env}
-# Example:            f01-raw-390403879405-dev
+# Naming convention:  {domain_abbr}-{purpose}-{account_id}-{country_code}-{env}
+# Example:            f01-raw-390403879405-de-dev
 
 # ─── Access Logs Bucket ─────────────────────────────────────────
 # Dedicated bucket for S3 server access logs. NOT logged itself
@@ -10,7 +10,7 @@
 
 module "s3_logs" {
   source            = "../modules/s3_bucket"
-  bucket_name       = "${var.domain_abbr}-logs-${data.aws_caller_identity.current.account_id}-${var.env}"
+  bucket_name       = "${var.domain_abbr}-logs-${data.aws_caller_identity.current.account_id}-${var.country_code}-${var.env}"
   enable_versioning = false
   kms_key_arn       = aws_kms_key.data_lake.arn
   # Bucket policy is managed externally (below) to combine DenyInsecureTransport
@@ -71,7 +71,7 @@ data "aws_iam_policy_document" "logs_delivery" {
 
 module "s3_raw" {
   source            = "../modules/s3_bucket"
-  bucket_name       = "${var.domain_abbr}-raw-${data.aws_caller_identity.current.account_id}-${var.env}"
+  bucket_name       = "${var.domain_abbr}-raw-${data.aws_caller_identity.current.account_id}-${var.country_code}-${var.env}"
   enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "raw/"
@@ -81,7 +81,7 @@ module "s3_raw" {
 
 module "s3_refined" {
   source            = "../modules/s3_bucket"
-  bucket_name       = "${var.domain_abbr}-refined-${data.aws_caller_identity.current.account_id}-${var.env}"
+  bucket_name       = "${var.domain_abbr}-refined-${data.aws_caller_identity.current.account_id}-${var.country_code}-${var.env}"
   enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "refined/"
@@ -91,7 +91,7 @@ module "s3_refined" {
 
 module "s3_curated" {
   source            = "../modules/s3_bucket"
-  bucket_name       = "${var.domain_abbr}-curated-${data.aws_caller_identity.current.account_id}-${var.env}"
+  bucket_name       = "${var.domain_abbr}-curated-${data.aws_caller_identity.current.account_id}-${var.country_code}-${var.env}"
   enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "curated/"
@@ -101,7 +101,7 @@ module "s3_curated" {
 
 module "s3_artifacts" {
   source            = "../modules/s3_bucket"
-  bucket_name       = "${var.domain_abbr}-artifacts-${data.aws_caller_identity.current.account_id}-${var.env}"
+  bucket_name       = "${var.domain_abbr}-artifacts-${data.aws_caller_identity.current.account_id}-${var.country_code}-${var.env}"
   enable_logging    = true
   logging_bucket_id = module.s3_logs.bucket_id
   logging_prefix    = "artifacts/"

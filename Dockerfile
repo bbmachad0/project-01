@@ -35,18 +35,16 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY setup/domain.json ./setup/
-# Install in editable-friendly layout (build deps only first)
+# Install the domain project and its dependencies (including dp_foundation)
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir pyspark==${SPARK_VERSION} ".[dev]" \
-    || pip install --no-cache-dir pyspark==${SPARK_VERSION} pytest ruff build
+    || pip install --no-cache-dir pyspark==${SPARK_VERSION} pytest ruff \
+       data-platform-foundation
 
 # ── Application code ─────────────────────────────────────────────
 COPY src/ ./src/
 COPY tests/ ./tests/
 COPY Makefile ./
-
-# Install the project in editable mode
-RUN pip install --no-cache-dir -e .
 
 # ── Non-root user ────────────────────────────────────────────────
 # Run as an unprivileged user in line with CIS Docker Benchmark 4.1

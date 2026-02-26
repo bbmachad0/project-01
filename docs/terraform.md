@@ -3,7 +3,7 @@
 ## Overview
 
 All infrastructure is defined in `infrastructure/` using Terraform with the
-AWS provider. The structure follows a layered approach: **foundation** for
+AWS provider. The structure follows a layered approach: **baseline** for
 shared resources, **projects** for domain-specific stacks, and **environments**
 as the root modules that compose everything together.
 
@@ -23,7 +23,7 @@ infrastructure/
 │   ├── stepfunction_pipeline/
 │   ├── iam_role/
 │   └── s3_bucket/
-├── foundation/                  # Shared infra
+├── baseline/                   # Shared infra
 │   ├── main.tf
 │   ├── s3.tf
 │   ├── iam.tf
@@ -52,7 +52,7 @@ infrastructure/
 
 ```
 environments/<env>/main.tf
-  ├── module "foundation"    → foundation/
+  ├── module "baseline"    → baseline/
   └── module "projects"      → projects/main.tf
         ├── module "sales"        → projects/sales/
         ├── module "customers"    → projects/customers/
@@ -64,14 +64,14 @@ environments/<env>/main.tf
 
 ---
 
-## Foundation Layer
+## Baseline Layer
 
 Shared across all projects within the domain:
 
 | Resource | Naming | Notes |
 |----------|--------|-------|
-| S3 buckets | `{abbr}-{purpose}-{account_id}-{env}` | raw, refined, curated, artifacts |
-| Glue databases | `{abbr}_{layer}` | raw, refined, curated |
+| S3 buckets | `{abbr}-{purpose}-{account_id}-{country_code}-{env}` | raw, refined, curated, artifacts |
+| Glue databases | `{abbr}_{country_code}_{layer}` | raw, refined, curated |
 | IAM base roles | `{abbr}-glue-base-{env}` | Common permissions |
 
 ---
@@ -82,7 +82,7 @@ Each project is a self-contained directory with:
 
 | File | Purpose |
 |------|---------|
-| `variables.tf` | Inputs: env, domain_abbr, project_slug, bucket names |
+| `variables.tf` | Inputs: env, domain_abbr, project_name, bucket names |
 | `tables.tf` | Glue Catalog tables (Standard in RAW, Iceberg elsewhere) |
 | `jobs.tf` | Glue Job definitions using `modules/glue_job` |
 | `optimizers.tf` | Table optimizers (compaction, orphan, retention) |
@@ -90,7 +90,7 @@ Each project is a self-contained directory with:
 | `outputs.tf` | Exports for cross-project references |
 
 The aggregator (`projects/main.tf`) passes each project a unique
-`project_slug` that becomes part of every resource name.
+`project_name` that becomes part of every resource name.
 
 ---
 

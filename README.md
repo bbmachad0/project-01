@@ -46,7 +46,7 @@ This architecture addresses the scalability and ownership bottlenecks that arise
 |---|---|
 | **Domain Ownership** | Each domain (this repo) fully owns its data, pipelines, infrastructure, and CI/CD. |
 | **Data as a Product** | Outputs (curated Iceberg tables) are treated as products with schemas, SLAs, and documentation. |
-| **Self-Serve Platform** | Shared `core` library, `_template/` project scaffold, and `bootstrap.sh` enable any team to bootstrap a new domain quickly. |
+| **Self-Serve Platform** | Shared `dp_foundation` library (from [`org-data-platform-foundation`](https://github.com/ORG/org-data-platform-foundation)), `_template/` project scaffold, and `bootstrap.sh` enable any team to bootstrap a new domain quickly. |
 | **Federated Governance** | KMS CMK, IAM isolation, tagging, and automated security scanning enforce organisational standards without a central gatekeeper. |
 
 ---
@@ -59,7 +59,7 @@ This repository is **one domain unit** inside an AWS Data Mesh. It is designed a
 - AWS Glue 5.1 (Apache Spark 3.5) for distributed processing.
 - Apache Iceberg format for curated and refined tables with automatic compaction and snapshot management.
 - AWS Step Functions for job orchestration.
-- Shared Python library (`core`) for consistent config, logging, and I/O across all jobs.
+- Shared Python library ([`dp_foundation`](https://github.com/ORG/org-data-platform-foundation)) for consistent config, logging, and I/O across all jobs.
 - Per-project IAM isolation- each project runs with its own scoped role.
 - GitHub Actions CI/CD with OIDC authentication (no stored credentials).
 - Multiple environments (dev / int / prod) as independent AWS account deployments.
@@ -77,7 +77,7 @@ New projects are bootstrapped by copying `infrastructure/projects/_template/` an
 ### DRY (Don't Repeat Yourself)
 
 - All resource naming derives from `setup/domain.json`- change it once, every bucket, database, job name, and IAM role updates automatically.
-- The `core` library eliminates boilerplate from every Glue job (Spark session creation, config resolution, structured logging, Iceberg I/O).
+- The `dp_foundation` library (maintained in [`org-data-platform-foundation`](https://github.com/ORG/org-data-platform-foundation)) eliminates boilerplate from every Glue job (Spark session creation, config resolution, structured logging, Iceberg I/O).
 - Reusable Terraform modules (`glue_job`, `glue_iceberg_table`, `s3_bucket`, etc.) encode best-practice patterns once and are instantiated per project.
 - Environment root modules (`dev/`, `int/`, `prod/`) are structurally identical- differences (VPC CIDR, account) are the only thing that varies.
 
@@ -99,7 +99,7 @@ All Terraform-managed AWS resources carry `git_sha`, `deployed_by`, and `reposit
 
 | Technology | Version / Details | Role |
 |---|---|---|
-| **Python** | 3.11 | Glue job runtime, `core` library, tests |
+| **Python** | 3.11 | Glue job runtime, tests |
 | **Apache Spark** | 3.5.6 (via AWS Glue 5.1) | Distributed processing engine |
 | **Apache Iceberg** | 1.7.1 | Open table format (refined/curated layers) |
 | **Terraform** | ≥ 1.14 | Infrastructure as Code |
@@ -127,29 +127,20 @@ All Terraform-managed AWS resources carry `git_sha`, `deployed_by`, and `reposit
 ```
 .
 ├── setup/
-│   ├── domain.json              # ⭐ Single source of truth: domain name, abbr, region
+│   ├── domain.json              # Single source of truth: domain name, abbr, region
 │   ├── bootstrap.sh             # One-time local setup: Java, Python, Spark, Terraform, AWS CLI
 │   ├── init-terraform.sh        # Generates backend.conf for each environment from domain.json
 │   └── README.md                # Detailed setup guide
 │
 ├── src/
-│   ├── core/                    # Shared Python library, built as .whl and uploaded to S3
-│   │   ├── __init__.py          # Package version (rewritten with commit SHA on deploy)
-│   │   ├── spark/session.py     # SparkSession factory (local ↔ Glue)
-│   │   ├── config/settings.py   # Runtime config resolver (env vars → domain.json → defaults)
-│   │   ├── io/readers.py        # Iceberg / standard table readers
-│   │   ├── io/writers.py        # Iceberg / standard table writers
-│   │   ├── iceberg/catalog.py   # Glue Catalog DDL helpers
-│   │   ├── logging/logger.py    # Structured logging (JSON or text)
-│   │   └── quality/checks.py    # Data quality assertion utilities
 │   └── jobs/
 │       ├── project01/           # Standalone .py scripts for project01 (NOT packaged in wheel)
 │       └── test02/              # Standalone .py scripts for test02
 │
 ├── tests/
 │   ├── conftest.py              # Shared fixtures (local SparkSession, test config)
-│   ├── test_config.py           # Tests for core.config
-│   ├── test_logging.py          # Tests for core.logging
+│   ├── test_config.py           # Tests for dp_foundation.config
+│   ├── test_logging.py          # Tests for dp_foundation.logging
 │   └── test_jobs.py             # Integration-style tests for job logic
 │
 ├── infrastructure/
@@ -164,7 +155,7 @@ All Terraform-managed AWS resources carry `git_sha`, `deployed_by`, and `reposit
 │   │   ├── s3_bucket/              # S3 with encryption, versioning, lifecycle, logging
 │   │   └── stepfunction_pipeline/  # Step Functions ASL + CloudWatch log group (KMS)
 │   │
-│   ├── foundation/              # Domain-wide shared infrastructure (applied once per env)
+│   ├── baseline/              # Domain-wide shared infrastructure (applied once per env)
 │   │   ├── s3.tf                # 5 S3 buckets: raw, refined, curated, artifacts, logs
 │   │   ├── kms.tf               # CMK with explicit key policy + CloudWatch Logs grant
 │   │   ├── glue_databases.tf    # Glue databases for each layer
@@ -176,11 +167,11 @@ All Terraform-managed AWS resources carry `git_sha`, `deployed_by`, and `reposit
 │   │
 │   ├── projects/
 │   │   ├── _template/           # ⭐ Copy this to create a new project
-│   │   │   ├── project.json     # { "slug": "REPLACE_ME" }
+│   │   │   ├── project.json     # { "name": "REPLACE_ME" }
 │   │   │   ├── providers.tf     # AWS provider with traceability default_tags
 │   │   │   ├── variables.tf     # environment variable + traceability vars
-│   │   │   ├── locals.tf        # Wires domain.json, project.json, foundation outputs
-│   │   │   ├── data.tf          # data.terraform_remote_state.foundation
+│   │   │   ├── locals.tf        # Wires domain.json, project.json, baseline outputs
+│   │   │   ├── data.tf          # data.terraform_remote_state.baseline
 │   │   │   ├── tables.tf        # Table definitions
 │   │   │   ├── jobs.tf          # Glue Job modules
 │   │   │   ├── iam.tf           # Instantiates iam_glue_job + iam_table_optimizer
@@ -193,14 +184,14 @@ All Terraform-managed AWS resources carry `git_sha`, `deployed_by`, and `reposit
 │   └── environments/            # Root Terraform modules (one per environment/account)
 │       ├── dev/
 │       │   ├── main.tf          # Instantiates foundation module + traceability vars
-│       │   ├── outputs.tf       # Re-exports ALL foundation outputs for projects
+│       │   ├── outputs.tf       # Re-exports ALL baseline outputs for projects
 │       │   └── backend.conf     # Generated by init-terraform.sh (git-ignored)
 │       ├── int/
 │       └── prod/
 │
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml               # Lint → test → terraform validate → build → security scan
+│       ├── ci.yml               # Lint → test → Terraform validate → security scan
 │       ├── _deploy.yml          # Reusable deploy logic (called by deploy-*.yml)
 │       ├── deploy-dev.yml       # Trigger: push to dev
 │       ├── deploy-int.yml       # Trigger: push to int
@@ -249,10 +240,10 @@ Source Systems
 
 Two additional buckets support the platform:
 
-- **artifacts**- stores the versioned `core` Python wheel (`.whl`) and all Glue job scripts (`.py`).
+- **artifacts**- stores the versioned `dp_foundation` Python wheel (`.whl`) from [`org-data-platform-foundation`](https://github.com/ORG/org-data-platform-foundation) and all Glue job scripts (`.py`).
 - **logs**- receives S3 server access logs from all other buckets.
 
-**Bucket naming:** `{domain_abbr}-{purpose}-{account_id}-{env}`, e.g. `f01-raw-390403879405-dev`. The account ID is resolved dynamically from STS- never hardcoded.
+**Bucket naming:** `{domain_abbr}-{purpose}-{account_id}-{country_code}-{env}`, e.g. `f01-raw-390403879405-de-dev`. The account ID is resolved dynamically from STS- never hardcoded.
 
 **All data buckets are configured with:**
 - KMS CMK encryption (`bucket_key_enabled = true` for cost efficiency)
@@ -270,7 +261,7 @@ Two additional buckets support the platform:
 Domain  (this repository)
   └── Project  (e.g. sales, customers, inventory)
         ├── Tables         RAW → Standard (Hive/Parquet); REFINED/CURATED → Iceberg
-        ├── Glue Jobs      PySpark ETL scripts that import from the core library
+        ├── Glue Jobs      PySpark ETL scripts that import from the dp_foundation library
         ├── Optimizers     Iceberg compaction, orphan cleanup, snapshot retention
         └── Pipelines      AWS Step Functions orchestrating job sequences
 ```
@@ -292,7 +283,7 @@ All resource naming, CI/CD configuration, and Python runtime config derive from 
 | Field | Where it is used |
 |---|---|
 | `domain_name` | Terraform descriptions, AWS resource tags |
-| `domain_abbr` | All resource name prefixes (`f01-raw-...`, `f01_raw` database, etc.) |
+| `domain_abbr` | All resource name prefixes (`f01-raw-...`, `f01_de_raw` database, etc.) |
 | `aws_region` | AWS provider region, bucket region, `.env` generation |
 
 **Edit this file once** when cloning the template for a new domain. Every other file reads from it automatically.
@@ -301,23 +292,23 @@ All resource naming, CI/CD configuration, and Python runtime config derive from 
 
 | Resource | Pattern | Example |
 |---|---|---|
-| S3 bucket | `{abbr}-{purpose}-{account_id}-{env}` | `f01-raw-390403879405-dev` |
-| Glue database | `{abbr}_{layer}` | `f01_raw` |
-| Glue job | `{abbr}-{slug}-{job_name}-{env}` | `f01-sales-daily-load-dev` |
-| Step Functions | `{abbr}-{slug}-pipeline-{name}-{env}` | `f01-sales-pipeline-ingest-dev` |
-| IAM role (Glue) | `{abbr}-glue-{slug}-{env}` | `f01-glue-sales-dev` |
-| IAM role (Optimizer) | `{abbr}-optimizer-{slug}-{env}` | `f01-optimizer-sales-dev` |
-| S3 data prefix | `{bucket}/{slug}/...` | `f01-raw-.../sales/` |
+| S3 bucket | `{abbr}-{purpose}-{account_id}-{country_code}-{env}` | `f01-raw-390403879405-de-dev` |
+| Glue database | `{abbr}_{country_code}_{layer}` | `f01_de_raw` |
+| Glue job | `{abbr}-{project_name}-{job_name}-{env}` | `f01-sales-daily-load-dev` |
+| Step Functions | `{abbr}-{project_name}-pipeline-{name}-{env}` | `f01-sales-pipeline-ingest-dev` |
+| IAM role (Glue) | `{abbr}-glue-{project_name}-{env}` | `f01-glue-sales-dev` |
+| IAM role (Optimizer) | `{abbr}-optimizer-{project_name}-{env}` | `f01-optimizer-sales-dev` |
+| S3 data prefix | `{bucket}/{project_name}/...` | `f01-raw-.../sales/` |
 | KMS alias | `alias/{abbr}-data-lake-{env}` | `alias/f01-data-lake-dev` |
 
-The `{slug}` (project slug) is declared once in `project.json` and substituted everywhere via `locals.tf`.
+The `{project_name}` (project name) is declared once in `project.json` and substituted everywhere via `locals.tf`.
 
-### 6.5 Shared Python Library- `core`
+### 6.5 Shared Python Library- `dp_foundation`
 
-The `src/core/` package is the "platform" layer shared by all Glue jobs. It is built as a Python wheel versioned with the commit SHA, uploaded to S3, and referenced via `--extra-py-files` on every Glue job. Jobs **never** import `awsglue` directly.
+The `dp_foundation` package is maintained in the standalone repository [`org-data-platform-foundation`](https://github.com/ORG/org-data-platform-foundation). It is built as a Python wheel, published as a GitHub Release asset, downloaded by this domain's CI/CD, uploaded to S3, and referenced via `--extra-py-files` on every Glue job. Jobs **never** import `awsglue` directly.
 
 ```
-core/
+dp_baseline/
 ├── spark/session.py     → get_spark(app_name) - local vs Glue session factory
 ├── config/settings.py   → get_config()        - env-var-aware runtime config resolution
 ├── io/readers.py        → read_iceberg(), read_table()
@@ -350,10 +341,10 @@ This is how the same job script runs on a developer's laptop **and** in AWS Glue
 Each Glue job is provisioned by the `modules/glue_job` Terraform module. Key attributes:
 
 - **Glue 5.1** runtime (Python 3.11, Spark 3.5.6).
-- The versioned `core` wheel is passed via `--extra-py-files`.
-- Job scripts live in S3 at `{artifacts_bucket}/{slug}/jobs/{job_name}.py` and are **not** baked into the wheel- updating a script does not require a wheel rebuild.
+- The versioned `dp_foundation` wheel is passed via `--extra-py-files`.
+- Job scripts live in S3 at `{artifacts_bucket}/{project_name}/jobs/{job_name}.py` and are **not** baked into the wheel- updating a script does not require a wheel rebuild.
 - All jobs run inside the domain **VPC** via a shared Glue Network Connection- traffic to S3 and the Glue Catalog never leaves the AWS network.
-- Temporary files (Spark shuffle, Glue bookmarks) go to `{artifacts_bucket}/glue-temp/{slug}/`.
+- Temporary files (Spark shuffle, Glue bookmarks) go to `{artifacts_bucket}/glue-temp/{project_name}/`.
 
 ### 6.7 Iceberg Table Lifecycle
 
@@ -371,20 +362,20 @@ Optimizers are provisioned **automatically** alongside the table- no manual conf
 
 ```
 environments/<env>/main.tf                   ← Root module (entry point per environment)
-  └── module "foundation"                    ← foundation/ (shared domain infra)
+  └── module "baseline"                    ← baseline/ (shared domain infra)
          ├── KMS, S3, VPC, IAM, Glue DBs
          └── outputs.tf  ─────────────────── stored in S3 remote state
                                                 ↑
 projects/<name>/                             ← Independent root module per project
-  └── data.terraform_remote_state.foundation ← reads foundation outputs from S3
-  └── locals.tf                              ← wires domain.json + project.json + foundation
+  └── data.terraform_remote_state.baseline ← reads baseline outputs from S3
+  └── locals.tf                              ← wires domain.json + project.json + baseline
          ├── tables.tf, jobs.tf, iam.tf
          └── pipelines.tf, optimizers.tf
 ```
 
-Projects are **independent Terraform root modules**- each has its own S3 remote state (`projects/{slug}/terraform.tfstate`) and is applied independently. This enables parallel deployments in CI and prevents a broken project from blocking others.
+Projects are **independent Terraform root modules**- each has its own S3 remote state (`projects/{project_name}/terraform.tfstate`) and is applied independently. This enables parallel deployments in CI and prevents a broken project from blocking others.
 
-Projects read foundation outputs via `data.terraform_remote_state`- they never hardcode bucket names or ARNs.
+Projects read baseline outputs via `data.terraform_remote_state`- they never hardcode bucket names or ARNs.
 
 ### 6.9 Per-Project IAM Isolation
 
@@ -394,12 +385,12 @@ Each project provisioned by `iam.tf` gets two dedicated IAM roles:
 
 | Permission | Scope |
 |---|---|
-| S3 object r/w/delete | Only `{bucket}/{project_slug}/*` on data buckets |
-| S3 list | Only with `s3:prefix` condition matching `{project_slug}/` |
+| S3 object r/w/delete | Only `{bucket}/{project_name}/*` on data buckets |
+| S3 list | Only with `s3:prefix` condition matching `{project_name}/` |
 | S3 artifacts | Full read; temp write only to `glue-temp/` prefix |
-| Glue Catalog read | Domain databases (`{abbr}_*`) + `default` |
+| Glue Catalog read | Domain databases (`{abbr}_{country_code}_*`) + `default` |
 | Glue Catalog write | Domain databases only |
-| SSM Parameter Store | `/{project_slug}/*` only |
+| SSM Parameter Store | `/{project_name}/*` only |
 | EC2 networking | `CreateNetworkInterface` scoped to domain subnet ARNs |
 | CloudWatch Logs | `/aws-glue/*` log groups |
 | KMS | Domain CMK only |
@@ -482,7 +473,6 @@ make terraform-init-dev      # initialise the dev workspace
 ```bash
 make test          # unit tests (local PySpark session)
 make lint          # ruff + format check
-make build         # build the core wheel
 ```
 
 ---
@@ -511,16 +501,16 @@ The Docker image (`FROM python:3.11-slim`) replicates Glue 5.1: Python 3.11, Ope
 
 ### 8.2 Writing a New Job
 
-All jobs follow a consistent pattern using only `core` abstractions:
+All jobs follow a consistent pattern using only `dp_foundation` abstractions:
 
 ```python
 """project_name - short description of this job."""
 
-from core.spark.session import get_spark
-from core.config.settings import get_config
-from core.io.readers import read_iceberg
-from core.io.writers import write_iceberg
-from core.logging.logger import get_logger
+from dp_foundation.spark.session import get_spark
+from dp_foundation.config.settings import get_config
+from dp_foundation.io.readers import read_iceberg
+from dp_foundation.io.writers import write_iceberg
+from dp_foundation.logging.logger import get_logger
 
 
 def main() -> None:
@@ -555,7 +545,7 @@ if __name__ == "__main__":
 
 **Key rules:**
 
-- No `awsglue` imports- use `core` only.
+- No `awsglue` imports- use `dp_foundation` only.
 - No environment literals or hardcoded bucket names- `get_config()` resolves them.
 - No branching on `ENV` inside job logic.
 - Scripts live in `src/jobs/<project>/` and are uploaded to S3 as standalone files- they are **not** packaged in the wheel.
@@ -576,11 +566,12 @@ make docker-run JOB=<project/job.py> # run a job inside Docker
 # ── Testing & Quality ─────────────────────────────
 make test                            # pytest with coverage report
 make lint                            # ruff check + format check
-make typecheck                       # mypy on src/core/
+
 make format                          # ruff auto-fix formatting
 
-# ── Build ─────────────────────────────────────────
-make build                           # build core-{version}+{sha}-py3-none-any.whl
+# ── Foundation Wheel ──────────────────────────────
+make download-foundation-wheel       # download dp_foundation wheel from GitHub Releases
+make upload-foundation-wheel ENVIRONMENT=dev  # upload wheel to domain S3 artifacts
 
 # ── Infrastructure ────────────────────────────────
 make terraform-init-dev|int|prod     # terraform init for the environment
@@ -589,11 +580,10 @@ make terraform-apply ENVIRONMENT=dev|int|prod
 make terraform-validate              # validate all Terraform files
 
 # ── Artifacts ─────────────────────────────────────
-make upload-wheel ENVIRONMENT=dev    # build + upload wheel to S3
 make upload-jobs  ENVIRONMENT=dev    # sync job scripts to S3
 
 # ── Scaffolding ───────────────────────────────────
-make new-project NAME=<name> SLUG=<short_id>  # copy _template/ for a new project
+make new-project NAME=<name>   # copy _template/ for a new project
 
 make clean                           # remove build artefacts
 ```
@@ -645,7 +635,7 @@ Bucket name: `tfstate-{AccountId}`. S3 native locking is used (`use_lockfile = t
 
 ```bash
 ./setup/init-terraform.sh          # generates backend.conf for each environment
-make terraform-init-dev            # initialise the foundation workspace locally
+make terraform-init-dev            # initialise the baseline workspace locally
 ```
 
 Projects are initialised automatically by CI at deploy time. To initialise a project workspace locally:
@@ -658,7 +648,7 @@ terraform init -backend-config=../../environments/dev/backend.conf
 ### 10.3 Adding a New Project
 
 ```bash
-make new-project NAME=myproject SLUG=mypj
+make new-project NAME=myproject
 ```
 
 This copies `_template/` to `infrastructure/projects/myproject/` and creates `src/jobs/myproject/`. Then:
@@ -713,10 +703,10 @@ All development work happens on `feature/*` branches. PRs target `dev`. Promotio
 
 | Workflow | Trigger | Actions |
 |---|---|---|
-| `ci.yml` | Every push, every PR | Lint → type-check → test → Terraform validate → wheel build → security scan |
-| `deploy-dev.yml` | Push to `dev` | Foundation → artifacts → destroy removed → deploy projects (Dev account) |
-| `deploy-int.yml` | Push to `int` | Foundation → artifacts → destroy removed → deploy projects (Int account) |
-| `deploy-prod.yml` | Push to `main` | Foundation → artifacts → destroy removed → deploy projects (Prod account) |
+| `ci.yml` | Every push, every PR | Lint → test → Terraform validate → security scan |
+| `deploy-dev.yml` | Push to `dev` | Baseline → artifacts → destroy removed → deploy projects (Dev account) |
+| `deploy-int.yml` | Push to `int` | Baseline → artifacts → destroy removed → deploy projects (Int account) |
+| `deploy-prod.yml` | Push to `main` | Baseline → artifacts → destroy removed → deploy projects (Prod account) |
 | `terraform-plan-pr.yml` | PR touching `infrastructure/` | Runs `terraform plan`, posts **full** output as PR comment |
 
 ### 11.3 AWS Authentication (OIDC)
@@ -765,8 +755,8 @@ The reusable `_deploy.yml` workflow enforces a strict deploy order:
    (paths-filter for component changes; git diff for added/removed projects)
         │
         ▼
-2. Foundation Terraform Apply
-   (S3 buckets, KMS, VPC, Glue databases— shared infra must exist first)
+2. Baseline Terraform Apply
+   (S3 buckets, KMS, VPC, Glue databases - shared infra must exist first)
         │
         ├──────────────────────────┐
         ▼                          ▼
@@ -780,9 +770,9 @@ The reusable `_deploy.yml` workflow enforces a strict deploy order:
 
 This ordering guarantees that S3 buckets always exist before artifacts are uploaded, artifacts always exist before Glue jobs reference them, and removed projects are torn down in the same pipeline run.
 
-**Selective deployment:** if only `infrastructure/projects/project01/` changed, only `project01` is re-applied. If shared components changed (core, jobs, foundation, modules), all projects are re-applied.
+**Selective deployment:** if only `infrastructure/projects/project01/` changed, only `project01` is re-applied. If shared components changed (python, jobs, baseline, modules), all projects are re-applied.
 
-**Automated teardown:** when a project directory is deleted from the repo, the `destroy-projects` job restores its Terraform files from `HEAD~1` and runs `terraform destroy`, ensuring the CI/CD pipeline is the single source of truth for all cloud mutations— including resource decommissioning. See [docs/ci-cd.md](docs/ci-cd.md#removing-a-project) for details.
+**Automated teardown:** when a project directory is deleted from the repo, the `destroy-projects` job restores its Terraform files from `HEAD~1` and runs `terraform destroy`, ensuring the CI/CD pipeline is the single source of truth for all cloud mutations - including resource decommissioning. See [docs/ci-cd.md](docs/ci-cd.md#removing-a-project) for details.
 
 ### 11.5 Change Detection
 
@@ -790,12 +780,12 @@ This ordering guarantees that S3 buckets always exist before artifacts are uploa
 
 | Filter | Paths | Effect |
 |---|---|---|
-| `core` | `src/core/**`, `pyproject.toml` | Wheel rebuild + all projects re-deployed |
+| `python` | `src/jobs/**`, `pyproject.toml`, `tests/**` | Script upload + all projects re-deployed |
 | `jobs` | `src/jobs/**` | Script upload + all projects re-deployed |
-| `foundation_infra` | `infrastructure/foundation/**`, `infrastructure/environments/**`, `infrastructure/modules/**`, `setup/domain.json` | Foundation + all projects re-applied |
+| `baseline_infra` | `infrastructure/baseline/**`, `infrastructure/environments/**`, `infrastructure/modules/**`, `setup/domain.json` | Baseline + all projects re-applied |
 | `projects_infra` | `infrastructure/projects/**` | Changed projects only; **removed** projects auto-destroyed |
 
-If only `infrastructure/projects/project01/` changed, only `project01` is re-applied— other projects are bypassed. If a project directory is deleted, its AWS resources are automatically destroyed (see [Section 11.4](#114-deploy-sequence)).
+If only `infrastructure/projects/project01/` changed, only `project01` is re-applied - other projects are bypassed. If a project directory is deleted, its AWS resources are automatically destroyed (see [Section 11.4](#114-deploy-sequence)).
 
 ### 11.6 Security Scanning in CI
 
@@ -812,7 +802,7 @@ Remove `--exit-zero` / `--soft-fail` flags once the baseline findings have been 
 
 ### 11.7 Traceability Tags
 
-Every `terraform apply` (foundation and projects) receives three environment variables injected by the workflow:
+Every `terraform apply` (baseline and projects) receives three environment variables injected by the workflow:
 
 ```
 TF_VAR_git_sha     = GITHUB_SHA
@@ -872,7 +862,7 @@ For **open improvement tasks**, see [docs/tasks.md](docs/tasks.md).
 ## 14. Contributing
 
 1. Create a `feature/*` branch from `dev`.
-2. Implement your changes, then run `make test lint typecheck` to verify locally.
+2. Implement your changes, then run `make test lint` to verify locally.
 3. Open a PR targeting `dev`. CI runs automatically- all checks must be green before merge is allowed.
 4. After merging to `dev`, promote to `int` and then `main` via subsequent PRs through the standard review process.
 

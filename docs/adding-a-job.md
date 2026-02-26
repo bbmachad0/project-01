@@ -16,13 +16,11 @@ Use the standard structure:
 ```python
 """<project> - <short description>."""
 
-import sys
-
-from core.spark.session import get_spark
-from core.config.settings import get_config
-from core.io.readers import read_iceberg
-from core.io.writers import write_iceberg
-from core.logging.logger import get_logger
+from dp_foundation.spark.session import get_spark
+from dp_foundation.config.settings import get_config
+from dp_foundation.io.readers import read_iceberg
+from dp_foundation.io.writers import write_iceberg
+from dp_foundation.logging.logger import get_logger
 
 
 def main() -> None:
@@ -33,7 +31,7 @@ def main() -> None:
     log.info("Starting <name> job")
 
     # ── Extract ──────────────────────────────────
-    df = read_iceberg(spark, catalog_db=cfg["refined_db"], table="<source>")
+    df = read_iceberg(spark, f"glue_catalog.{cfg['iceberg_database_refined']}.<source>")
 
     # ── Transform ────────────────────────────────
     result = df  # your PySpark transformations here
@@ -41,9 +39,7 @@ def main() -> None:
     # ── Load ─────────────────────────────────────
     write_iceberg(
         df=result,
-        path=f"s3://{cfg['s3_curated_bucket']}/iceberg/<target>",
-        catalog_db=cfg["curated_db"],
-        table="<target>",
+        table=f"glue_catalog.{cfg['iceberg_database_curated']}.<target>",
         mode="append",
     )
 
@@ -57,7 +53,7 @@ if __name__ == "__main__":
 
 ### Key rules
 
-- **No `awsglue` imports** - use `core` abstractions only.
+- **No `awsglue` imports** - use `dp_foundation` abstractions only.
 - **No environment branching** - `get_spark()` and `get_config()` handle it.
 - Job scripts are **not packaged in the wheel** - they are uploaded to S3 as
   standalone `.py` files.
@@ -72,11 +68,11 @@ Edit `infrastructure/projects/<project>/jobs.tf`:
 module "job_<name>" {
   source = "../../modules/glue_job"
 
-  job_name       = "${local.foundation.domain_abbr}-${local.config.slug}-<name>-${var.environment}"
-  script_s3_path = "s3://${local.foundation.s3_artifacts_bucket_id}/jobs/<project>/job_<name>.py"
-  extra_py_files = "s3://${local.foundation.s3_artifacts_bucket_id}/wheels/core-latest-py3-none-any.whl"
+  job_name       = "${local.baseline.domain_abbr}-${local.config.name}-<name>-${var.environment}"
+  script_s3_path = "s3://${local.baseline.s3_artifacts_bucket_id}/jobs/<project>/job_<name>.py"
+  extra_py_files = "s3://${local.baseline.s3_artifacts_bucket_id}/wheels/data_platform_foundation-${var.wheel_version}-py3-none-any.whl"
   role_arn       = module.iam_glue_job.role_arn
-  connections    = [local.foundation.glue_connection_name]
+  connections    = [local.baseline.glue_connection_name]
 
   default_arguments = {
     "--ENV" = var.environment
@@ -87,7 +83,18 @@ module "job_<name>" {
 If the job writes to a **new table**, also add entries in:
 
 - `tables.tf` - table definition (Standard or Iceberg)
-- `optimizers.tf` - compaction / orphan cleanup for Iceberg tables
+
+> **Note:** Iceberg table optimizers (compaction, snapshot retention, orphan
+> file cleanup) are provisioned automatically by the `glue_iceberg_table`
+> module - no manual entries in `optimizers.tf` are needed.
+
+> **Note:** Glue `default_arguments` keys (without the `--` prefix) are
+> automatically bridged to environment variables at runtime by `dp_foundation.config.args`.
+> This means `--ENV dev` becomes `os.getenv("ENV") == "dev"` inside the job.
+
+> **Note:** The `extra_py_files` reference uses `var.wheel_version`, which is
+> set via `TF_VAR_wheel_version` in CI.  For local Terraform plans, the
+> default value `"latest"` is used.
 
 ---
 

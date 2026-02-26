@@ -28,9 +28,9 @@ to detect which components changed:
 
 | Filter | Path pattern | What it triggers |
 |--------|-------------|------------------|
-| `core` | `src/core/**`, `pyproject.toml` | Wheel rebuild + upload; **all** projects re-deployed |
+| `python` | `src/jobs/**`, `pyproject.toml`, `tests/**` | Script upload; **all** projects re-deployed |
 | `jobs` | `src/jobs/**` | Script upload to S3; **all** projects re-deployed |
-| `foundation_infra` | `infrastructure/foundation/**`, `infrastructure/environments/**`, `infrastructure/modules/**`, `setup/domain.json` | Foundation apply + **all** projects re-applied |
+| `baseline_infra` | `infrastructure/baseline/**`, `infrastructure/environments/**`, `infrastructure/modules/**`, `setup/domain.json` | Baseline apply + **all** projects re-applied |
 | `projects_infra` | `infrastructure/projects/**` | **Only changed** projects re-applied |
 
 This avoids rebuilding the wheel when only a job script changed, and avoids
@@ -51,10 +51,9 @@ previous commit but no longer exist. These are passed to a dedicated
 2. Set up Python (version from `domain.json`)
 3. Install dependencies (`pip install -e ".[dev]"`)
 4. Lint (`ruff check`)
-5. Type check (`mypy src/core/`)
-6. Unit tests (`pytest`)
-7. Terraform validate (all environments)
-8. Build wheel (if `src/core/**` changed)
+5. Unit tests (`pytest`)
+6. Terraform validate (all environments)
+7. Security scan (pip-audit, bandit, checkov)
 
 ### Deploy (`deploy-{dev,int,prod}.yml`)
 
@@ -67,7 +66,7 @@ strict four-phase pipeline:
 └──────────────┬──────────────────┘
                │
 ┌──────────────▼──────────────────┐
-│ 2. Foundation Terraform Apply   │  S3, IAM, VPC, KMS, Glue DBs
+│ 2. Baseline Terraform Apply   │  S3, IAM, VPC, KMS, Glue DBs
 └──────────────┬──────────────────┘
                │
        ┌───────┴────────┐
@@ -83,14 +82,14 @@ strict four-phase pipeline:
 ```
 
 **Phase 1- Detect Changes + Discover:**
-- `paths-filter` classifies what changed (core, jobs, foundation, projects).
+- `paths-filter` classifies what changed (python, jobs, baseline, projects).
 - The `discover` job builds two matrices: projects to **deploy** and projects to **destroy**.
 
-**Phase 2- Foundation:**
+**Phase 2- Baseline:**
 - `terraform apply` on `infrastructure/environments/<env>/` (shared infra).
 
-**Phase 3a- Artifacts Upload** (conditional on `core` / `jobs` changes):
-- Wheel build + versioned upload (only if `src/core/**` changed).
+**Phase 3a- Artifacts Upload** (conditional on `python` / `jobs` changes):
+- Foundation wheel download from GitHub Releases + upload to S3 (only if version changed).
 - Script sync via `s3 sync --delete` (only if `src/jobs/**` changed).
 
 **Phase 3b- Destroy Removed Projects** (runs in parallel with artifacts):
@@ -101,7 +100,7 @@ strict four-phase pipeline:
 **Phase 4- Deploy Projects:**
 - `terraform apply` per project (parallel matrix, `fail-fast: false`).
 - Only affected projects are included- either changed ones, or all of them
-  if shared components (core, jobs, foundation, modules) changed.
+  if shared components (python, jobs, baseline, modules) changed.
 
 This ordering guarantees: S3 buckets exist → artifacts are uploaded →
 Glue jobs can reference them. Destroy runs independently since it only
@@ -161,9 +160,9 @@ minimal set of projects that need re-applying:
 
 | What changed | Projects deployed |
 |---|---|
-| `src/core/**` or `pyproject.toml` | **All**- new wheel affects every job |
+| `src/jobs/**` or `pyproject.toml` | **All**— new scripts or dependency changes affect every job |
 | `src/jobs/**` | **All**- scripts are synced globally |
-| `infrastructure/foundation/**`, `modules/**`, `environments/**` | **All**- shared infra may affect any project |
+| `infrastructure/baseline/**`, `modules/**`, `environments/**` | **All**- shared infra may affect any project |
 | Only `infrastructure/projects/sales/` | **Only `sales`**- `git diff` scopes to changed dirs |
 | Nothing relevant changed | **None**- entire deploy workflow is skipped |
 
@@ -182,7 +181,7 @@ the `destroy-projects` job handles decommissioning automatically.
    as **removed**.
 2. The `destroy-projects` job restores the deleted Terraform files via
    `git checkout HEAD~1 -- infrastructure/projects/<name>/`.
-3. It reads the `slug` from the restored `project.json` to locate the
+3. It reads the `name` from the restored `project.json` to locate the
    correct remote state file in S3.
 4. `terraform init` connects to the existing state, then
    `terraform plan -destroy` + `terraform apply` tears down all AWS
@@ -221,7 +220,7 @@ The workflow will automatically:
   required if needed.
 
 - **State file cleanup:** after a successful destroy, the Terraform state
-  file remains in S3 (`projects/<slug>/terraform.tfstate`). It can be
+  file remains in S3 (`projects/<name>/terraform.tfstate`). It can be
   deleted manually once the teardown is confirmed.
 
 ---

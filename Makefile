@@ -6,6 +6,7 @@ SHELL := /bin/bash
 
 # Read from setup/domain.json (single source of truth)
 DOMAIN_ABBR  := $(shell jq -r .domain_abbr setup/domain.json)
+COUNTRY_CODE := $(shell jq -r .country_code setup/domain.json)
 AWS_REGION   := $(shell jq -r .aws_region setup/domain.json)
 ACCOUNT_ID   := $(shell aws sts get-caller-identity --query Account --output text 2>/dev/null)
 
@@ -19,7 +20,6 @@ ENVIRONMENT  ?= dev
 DOCKER_IMAGE := $(DOMAIN_ABBR)-local
 DOCKER_TAG   := latest
 WHEEL_DIR    := dist
-WHEEL_NAME   := core-latest-py3-none-any.whl
 
 # ─── Help ────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ install: ## Install project in editable mode with dev dependencies
 
 .PHONY: run-local
 run-local: ## Run a job locally (usage: make run-local JOB=sales/job_daily_sales.py)
-	ENV=local $(PYTHON) src/jobs/$(JOB)
+	set -a && [ -f .env ] && . ./.env || true && set +a && ENV=local $(PYTHON) src/jobs/$(JOB)
 
 .PHONY: docker-build
 docker-build: ## Build the local Spark development Docker image
@@ -55,6 +55,7 @@ docker-build: ## Build the local Spark development Docker image
 .PHONY: docker-run
 docker-run: ## Run a job inside the local Docker container
 	$(DOCKER) run --rm \
+		$(if $(wildcard .env),--env-file .env) \
 		-e ENV=local \
 		-e AWS_REGION=$(AWS_REGION) \
 		-v $(HOME)/.aws:/root/.aws:ro \
@@ -66,28 +67,19 @@ docker-run: ## Run a job inside the local Docker container
 
 .PHONY: test
 test: ## Run all unit tests with coverage
-	$(PYTEST) tests/ -v --tb=short --cov=core --cov-report=term-missing
+	$(PYTEST) tests/ -v --tb=short --cov-report=term-missing
 
 .PHONY: lint
 lint: ## Run linters (ruff)
-	ruff check src/ tests/
-	ruff format --check src/ tests/
+	ruff check src/jobs/ tests/
+	ruff format --check src/jobs/ tests/
 
 .PHONY: format
 format: ## Auto-format code with ruff
-	ruff format src/ tests/
-	ruff check --fix src/ tests/
-
-.PHONY: typecheck
-typecheck: ## Run mypy type checking
-	mypy src/core/
+	ruff format src/jobs/ tests/
+	ruff check --fix src/jobs/ tests/
 
 # ─── Build ───────────────────────────────────────────────────────
-
-.PHONY: build
-build: ## Build the .whl distribution
-	rm -rf $(WHEEL_DIR)
-	$(PYTHON) -m build --wheel --outdir $(WHEEL_DIR)
 
 .PHONY: clean
 clean: ## Remove build artifacts and caches
@@ -141,31 +133,34 @@ init-terraform: ## Regenerate all backend.conf files from domain.json
 	@./setup/init-terraform.sh
 
 .PHONY: new-project
-new-project: ## Scaffold a new project  (NAME=<dir_name>  SLUG=<short_id>)
-	@[ -n "$(NAME)" ] || { echo "Usage: make new-project NAME=<name> SLUG=<slug>"; exit 1; }
-	@[ -n "$(SLUG)" ] || { echo "Usage: make new-project NAME=<name> SLUG=<slug>"; exit 1; }
+new-project: ## Scaffold a new project  (NAME=<project_name>)
+	@[ -n "$(NAME)" ] || { echo "Usage: make new-project NAME=<name>"; exit 1; }
 	@[ ! -d "infrastructure/projects/$(NAME)" ] || \
 		{ echo "ERROR: infrastructure/projects/$(NAME) already exists"; exit 1; }
 	cp -r infrastructure/projects/_template infrastructure/projects/$(NAME)
-	printf '{\n  "slug": "$(SLUG)"\n}\n' > infrastructure/projects/$(NAME)/project.json
+	printf '{\n  "name": "$(NAME)",\n  "data_owner": "team-name",\n  "data_classification": "internal",\n  "pii": false,\n  "sla_tier": "standard",\n  "team_email": "team@example.com"\n}\n' > infrastructure/projects/$(NAME)/project.json
+	mkdir -p src/jobs/$(NAME)
+	cp src/jobs/_template/job_example.py src/jobs/$(NAME)/job_example.py
 	@echo ""
 	@echo "Created infrastructure/projects/$(NAME)/"
+	@echo "Created src/jobs/$(NAME)/"
 	@echo ""
 	@echo "Next steps:"
-	@echo "  1. Edit tables.tf    - define Glue Data Catalog tables"
-	@echo "  2. Edit jobs.tf      - define Glue Jobs"
-	@echo "  3. Edit optimizers.tf - wire table optimizers"
+	@echo "  1. Edit project.json  - set data_owner, team_email"
+	@echo "  2. Edit tables.tf     - define Glue Data Catalog tables"
+	@echo "  3. Edit jobs.tf       - define Glue Jobs"
 	@echo "  4. Edit pipelines.tf  - compose Step Function pipelines"
-	@echo "  5. Commit and push   - CI/CD picks the new project up automatically"
+	@echo "  5. Rename/edit src/jobs/$(NAME)/job_example.py"
+	@echo "  6. Commit and push    - CI/CD picks the new project up automatically"
 
 .PHONY: tf-init-project
 tf-init-project: ## Init Terraform for a single project  (PROJECT=<name> ENVIRONMENT=dev|int|prod)
 	@[ -n "$(PROJECT)" ] || { echo "Usage: make tf-init-project PROJECT=<name> ENVIRONMENT=dev|int|prod"; exit 1; }
-	$(eval SLUG := $(shell jq -r .slug infrastructure/projects/$(PROJECT)/project.json))
+	$(eval PROJ_NAME := $(shell jq -r .name infrastructure/projects/$(PROJECT)/project.json))
 	cd infrastructure/projects/$(PROJECT) && \
 	  $(TF) init \
 	    -backend-config="bucket=tfstate-$(ACCOUNT_ID)" \
-	    -backend-config="key=projects/$(SLUG)/terraform.tfstate" \
+	    -backend-config="key=projects/$(PROJ_NAME)/terraform.tfstate" \
 	    -backend-config="region=$(AWS_REGION)" \
 	    -backend-config="use_lockfile=true"
 
@@ -184,11 +179,20 @@ tf-apply-project: tf-init-project ## Apply Terraform for a single project  (PROJ
 .PHONY: upload-jobs
 upload-jobs: ## Sync job scripts to S3 artifacts bucket
 	aws s3 sync src/jobs/ \
-		s3://$(DOMAIN_ABBR)-artifacts-$(ACCOUNT_ID)-$(ENVIRONMENT)/jobs/ \
+		s3://$(DOMAIN_ABBR)-artifacts-$(ACCOUNT_ID)-$(COUNTRY_CODE)-$(ENVIRONMENT)/jobs/ \
 		--delete --exact-timestamps
 
-.PHONY: upload-wheel
-upload-wheel: build ## Build and upload wheel to S3
-	WHEEL=$$(ls $(WHEEL_DIR)/*.whl | head -1) && \
-	aws s3 cp "$$WHEEL" \
-		s3://$(DOMAIN_ABBR)-artifacts-$(ACCOUNT_ID)-$(ENVIRONMENT)/wheels/$(WHEEL_NAME)
+.PHONY: download-foundation-wheel
+download-foundation-wheel: ## Download foundation library wheel from GitHub Releases
+	@FOUNDATION_VERSION=$${FOUNDATION_VERSION:-1.0.0} && \
+	WHEEL_NAME="data_platform_foundation-$${FOUNDATION_VERSION}-py3-none-any.whl" && \
+	curl -fsSL -o "$${WHEEL_NAME}" \
+		"https://github.com/ORG/org-data-platform-foundation/releases/download/v$${FOUNDATION_VERSION}/$${WHEEL_NAME}" && \
+	echo "Downloaded $${WHEEL_NAME}"
+
+.PHONY: upload-foundation-wheel
+upload-foundation-wheel: download-foundation-wheel ## Download and upload foundation wheel to S3
+	@FOUNDATION_VERSION=$${FOUNDATION_VERSION:-1.0.0} && \
+	WHEEL_NAME="data_platform_foundation-$${FOUNDATION_VERSION}-py3-none-any.whl" && \
+	aws s3 cp "$${WHEEL_NAME}" \
+		s3://$(DOMAIN_ABBR)-artifacts-$(ACCOUNT_ID)-$(COUNTRY_CODE)-$(ENVIRONMENT)/wheels/$${WHEEL_NAME}

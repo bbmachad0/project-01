@@ -1,6 +1,6 @@
 # ─── Project Stack - Providers ───────────────────────────────────
 # This file is identical across all projects - do NOT customise it.
-# The project slug and all shared values come from locals.tf / data.tf.
+# The project name and all shared values come from locals.tf / data.tf.
 # ─────────────────────────────────────────────────────────────────
 
 terraform {
@@ -29,7 +29,7 @@ provider "aws" {
     tags = {
       domain      = local.domain.domain_name
       domain_abbr = local.domain.domain_abbr
-      project     = local.config.slug
+      project     = local.config.name
       env         = var.environment
       managed_by  = "terraform"
       git_sha     = var.git_sha

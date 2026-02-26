@@ -1,5 +1,5 @@
 # ─── Terraform Plan on Pull Request ──────────────────────────────
-# Runs terraform plan for foundation + all auto-discovered projects
+# Runs terraform plan for baseline + all auto-discovered projects
 # when infra files change, then posts a combined sticky PR comment.
 #
 # No hardcoded project names - projects discovered automatically from
@@ -82,9 +82,9 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      # ── Plan Foundation ────────────────────────────────────────
-      - name: Plan Foundation
-        id: plan-foundation
+      # ── Plan Baseline ────────────────────────────────────────
+      - name: Plan Baseline
+        id: plan-baseline
         env:
           ENV:        ${{ steps.env.outputs.name }}
           ACCOUNT_ID: ${{ steps.aws.outputs.account_id }}
@@ -96,7 +96,7 @@ jobs:
             -backend-config="region=${REGION}" \
             -backend-config="use_lockfile=true" -input=false -no-color > /dev/null 2>&1
           terraform -chdir="infrastructure/environments/${ENV}" plan \
-            -no-color -input=false 2>&1 > /tmp/plan-foundation.txt
+            -no-color -input=false 2>&1 > /tmp/plan-baseline.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           set -e
         continue-on-error: true
@@ -125,8 +125,8 @@ jobs:
           OVERALL_EXIT=0
           while IFS= read -r PROJECT; do
             [[ -z "$PROJECT" ]] && continue
-            SLUG=$(jq -r .slug "infrastructure/projects/${PROJECT}/project.json")
-            echo "=== Project: ${PROJECT} (slug: ${SLUG}) ===" >> /tmp/plan-projects.txt
+            SLUG=$(jq -r .name "infrastructure/projects/${PROJECT}/project.json")
+            echo "=== Project: ${PROJECT} (name: ${SLUG}) ===" >> /tmp/plan-projects.txt
             terraform -chdir="infrastructure/projects/${PROJECT}" init \
               -backend-config="bucket=tfstate-${ACCOUNT_ID}" \
               -backend-config="key=projects/${SLUG}/terraform.tfstate" \
@@ -146,28 +146,28 @@ jobs:
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         env:
           ENV_NAME:          ${{ steps.env.outputs.name }}
-          FOUNDATION_EXIT:   ${{ steps.plan-foundation.outputs.exit_code }}
+          BASELINE_EXIT:     ${{ steps.plan-baseline.outputs.exit_code }}
           PROJECTS_EXIT:     ${{ steps.plan-projects.outputs.exit_code }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const env         = process.env.ENV_NAME;
-            const fExit       = process.env.FOUNDATION_EXIT;
+            const fExit       = process.env.BASELINE_EXIT;
             const pExit       = process.env.PROJECTS_EXIT;
             const overallOk   = fExit === '0' && pExit === '0';
             const status      = overallOk ? '✅' : '❌';
-            const planFoundation = fs.readFileSync('/tmp/plan-foundation.txt', 'utf8');
+            const planBaseline  = fs.readFileSync('/tmp/plan-baseline.txt', 'utf8');
             const planProjects   = fs.readFileSync('/tmp/plan-projects.txt',   'utf8');
 
             const body = [
               `<!-- tf-plan-${env} -->`,
               `### ${status} Terraform Plan - \`${env}\``,
               '',
-              `<details><summary>Foundation</summary>`,
+              `<details><summary>Baseline</summary>`,
               '',
               '```hcl',
-              planFoundation,
+              planBaseline,
               '```',
               '</details>',
               '',
@@ -200,5 +200,5 @@ jobs:
             }
 
       - name: Fail if any plan failed
-        if: steps.plan-foundation.outputs.exit_code != '0' || steps.plan-projects.outputs.exit_code != '0'
+        if: steps.plan-baseline.outputs.exit_code != '0' || steps.plan-projects.outputs.exit_code != '0'
         run: exit 1

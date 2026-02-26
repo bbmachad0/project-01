@@ -1,4 +1,4 @@
-# ─── Foundation - Private Subnets & Network ──────────────────────
+# ─── Baseline - Private Subnets & Network ────────────────────────
 # Glue jobs run inside private subnets.
 # Subnet CIDRs are derived automatically from var.vpc_cidr (DRY).
 # S3 and Glue API traffic stays inside AWS via VPC endpoints.
@@ -94,6 +94,44 @@ resource "aws_vpc_endpoint" "glue" {
 
   tags = merge(local.common_tags, {
     Name = "${var.domain_abbr}-vpce-glue-${var.env}"
+  })
+}
+
+# ─── STS Interface Endpoint ──────────────────────────────────────
+# Required: settings.py calls sts:GetCallerIdentity to resolve the
+# account ID for bucket naming.  Without this endpoint the call
+# times out in the private-only VPC.
+
+resource "aws_vpc_endpoint" "sts" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.sts"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  private_dns_enabled = true
+
+  security_group_ids = [aws_security_group.glue_endpoint.id]
+
+  tags = merge(local.common_tags, {
+    Name = "${var.domain_abbr}-vpce-sts-${var.env}"
+  })
+}
+
+# ─── CloudWatch Logs Interface Endpoint ──────────────────────────
+# Future-proofing: explicit boto3 CloudWatch Logs calls (e.g. custom
+# metrics, log queries) and any dp_foundation library extensions will need
+# this endpoint in the NAT-less VPC.
+
+resource "aws_vpc_endpoint" "logs" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  private_dns_enabled = true
+
+  security_group_ids = [aws_security_group.glue_endpoint.id]
+
+  tags = merge(local.common_tags, {
+    Name = "${var.domain_abbr}-vpce-logs-${var.env}"
   })
 }
 

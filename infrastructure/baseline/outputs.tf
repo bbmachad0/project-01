@@ -1,4 +1,4 @@
-# ─── Foundation - Outputs ────────────────────────────────────────
+# ─── Baseline - Outputs ──────────────────────────────────────────
 
 # ── Domain ───────────────────────────────────────────────────────
 
@@ -8,6 +8,10 @@ output "domain_name" {
 
 output "domain_abbr" {
   value = var.domain_abbr
+}
+
+output "country_code" {
+  value = var.country_code
 }
 
 # ── S3 ───────────────────────────────────────────────────────────
@@ -112,4 +116,11 @@ output "private_subnet_arns" {
 output "glue_connection_name" {
   description = "Name of the domain-level Glue VPC connection (shared by all jobs)."
   value       = aws_glue_connection.main.name
+}
+
+# ── Observability ────────────────────────────────────────────────
+
+output "sns_pipeline_alerts_arn" {
+  description = "ARN of the SNS topic for pipeline and Glue job failure alerts."
+  value       = aws_sns_topic.pipeline_alerts.arn
 }

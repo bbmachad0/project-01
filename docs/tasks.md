@@ -15,7 +15,7 @@ Status: `open` | `in-progress` | `done`
 - [SecOps](#secops)
 - [DevOps / CI-CD](#devops--ci-cd)
 - [Platform / DataOps](#platform--dataops)
-- [Data Engineering / Core Library](#data-engineering--core-library)
+- [Data Engineering / Foundation Library](#data-engineering--foundation-library)
 
 ---
 
@@ -31,7 +31,7 @@ Tasks related to IAM, network security, encryption, supply chain security, and c
 |---|---|
 | **Severity** | CRITICAL |
 | **Status** | done |
-| **Files** | `infrastructure/foundation/iam_orchestration.tf` |
+| **Files** | `infrastructure/baseline/iam_orchestration.tf` |
 
 #### Problem
 
@@ -164,11 +164,11 @@ Tasks related to CI/CD pipeline reliability, security of the deployment process,
 
 The `_deploy.yml` reusable workflow uses a single `AWS_ROLE_ARN` for three distinctly different responsibilities:
 
-1. **Foundation job**- `terraform apply` on shared infrastructure (IAM, VPC, S3, KMS).
+1. **Baseline job**- `terraform apply` on shared infrastructure (IAM, VPC, S3, KMS).
 2. **Artifacts job**- `s3 cp` and `s3 sync` to upload wheel and job scripts.
 3. **Deploy-projects job**- `terraform apply` per project (Glue jobs, tables, optimizers).
 
-This violates least privilege: the role that applies Terraform to foundation (and therefore can modify IAM, KMS, VPC) should not also have S3 write access for artifact uploads, and vice versa.
+This violates least privilege: the role that applies Terraform to baseline (and therefore can modify IAM, KMS, VPC) should not also have S3 write access for artifact uploads, and vice versa.
 
 #### Solution
 
@@ -176,7 +176,7 @@ Create three dedicated CI/CD IAM roles per account:
 
 | Role Name | Permissions | Used By |
 |---|---|---|
-| `ci-terraform-foundation-<env>` | Full Terraform apply on foundation resources | `foundation` job |
+| `ci-terraform-baseline-<env>` | Full Terraform apply on baseline resources | `baseline` job |
 | `ci-artifacts-<env>` | `s3:PutObject`, `s3:GetObject` on `{artifacts_bucket}/*` only | `artifacts` job |
 | `ci-terraform-projects-<env>` | Terraform apply scoped to project-level resources (Glue, SFN, limited IAM) | `deploy-projects` job |
 
@@ -190,7 +190,7 @@ Update `_deploy.yml` to accept three separate role ARN inputs and `deploy-*.yml`
 |---|---|
 | **Severity** | MEDIUM |
 | **Status** | open |
-| **Files** | `src/core/config/settings.py`, `setup/bootstrap.sh` |
+| **Files** | `dp_foundation/config/settings.py (in org-data-platform-foundation repo)`, `setup/bootstrap.sh` |
 
 #### Problem
 
@@ -233,7 +233,7 @@ df = read_iceberg(spark, catalog_db=cfg["refined_db"], table="<source>")
 write_iceberg(df=result, path=f"s3://...", catalog_db=cfg["curated_db"], table="<target>", mode="append")
 ```
 
-The actual signatures in `core/io/readers.py` and `core/io/writers.py` are:
+The actual signatures in `dp_foundation/io/readers.py` and `dp_foundation/io/writers.py` are:
 
 ```python
 # Actual code:
@@ -250,11 +250,11 @@ A developer following this documentation will write code that fails immediately.
 Update the example in `docs/adding-a-job.md` to match the actual API:
 
 ```python
-from core.spark.session import get_spark
-from core.config.settings import get_config
-from core.io.readers import read_iceberg
-from core.io.writers import write_iceberg
-from core.logging.logger import get_logger
+from dp_foundation.spark.session import get_spark
+from dp_foundation.config.settings import get_config
+from dp_foundation.io.readers import read_iceberg
+from dp_foundation.io.writers import write_iceberg
+from dp_foundation.logging.logger import get_logger
 
 
 def main() -> None:
@@ -285,7 +285,7 @@ Also remove `import sys` from the example since it is unused.
 
 ---
 
-### P0-DEV-05- Makefile `WHEEL_NAME` Still Uses Removed `core-latest` Alias
+### P0-DEV-05- Makefile `WHEEL_NAME` Still Uses Removed Legacy Wheel Alias
 
 | Field | Value |
 |---|---|
@@ -295,7 +295,7 @@ Also remove `import sys` from the example since it is unused.
 
 #### Problem
 
-The Makefile defines `WHEEL_NAME := core-latest-py3-none-any.whl` and uses it in the `upload-wheel` target. The CI/CD pipeline (`_deploy.yml`) removed the `core-latest` alias as part of the security hardening sprint (completed in Phase 2) and now uploads only versioned wheels (`core-1.0.0+{sha}-py3-none-any.whl`).
+The Makefile defines `WHEEL_NAME := data_platform_foundation-{version}-py3-none-any.whl` and uses it in the `upload-wheel` target. The CI/CD pipeline (`_deploy.yml`) removed the legacy alias as part of the security hardening sprint (completed in Phase 2) and now uploads only versioned wheels (`data_platform_foundation-{version}-py3-none-any.whl`).
 
 The Makefile's `upload-wheel` target therefore uploads a wheel with a different filename than what the CI pipeline uses, creating inconsistency between local and CI deployments.
 
@@ -352,8 +352,8 @@ Tasks related to the developer platform, project onboarding, data governance, an
 | Field | Value |
 |---|---|
 | **Severity** | CRITICAL |
-| **Status** | open |
-| **Files** | `src/core/config/settings.py`, `src/core/spark/session.py`, `src/jobs/**/*.py` |
+| **Status** | done |
+| **Files** | `dp_foundation/config/settings.py (in org-data-platform-foundation repo)`, `dp_foundation/spark/session.py (in org-data-platform-foundation repo)`, `src/jobs/**/*.py` |
 
 #### Problem
 
@@ -369,9 +369,9 @@ This means that when a job runs in AWS Glue:
 
 #### Solution
 
-Create a lightweight argument bridge in `core` that parses `sys.argv` for Glue-style `--KEY value` pairs **without importing `awsglue`**, and inject them as environment variables before any other module consumes them. This preserves the "no `awsglue` imports" principle.
+Create a lightweight argument bridge in `dp_foundation` that parses `sys.argv` for Glue-style `--KEY value` pairs **without importing `awsglue`**, and inject them as environment variables before any other module consumes them. This preserves the "no `awsglue` imports" principle.
 
-1. **Create `src/core/config/args.py`**:
+1. **Create `dp_foundation/config/args.py`** (in `org-data-platform-foundation` repo):
 
    ```python
    """Bridge AWS Glue job arguments (sys.argv) to environment variables.
@@ -380,7 +380,7 @@ Create a lightweight argument bridge in `core` that parses `sys.argv` for Glue-s
    This module parses them and sets them as OS environment variables
    so that settings.py and session.py can read them transparently.
 
-   Must be imported BEFORE settings.py (handled by core.__init__).
+   Must be imported BEFORE settings.py (handled by dp_foundation.__init__).
    """
    import os
    import sys
@@ -405,13 +405,13 @@ Create a lightweight argument bridge in `core` that parses `sys.argv` for Glue-s
    bridge_glue_args()
    ```
 
-2. **In `core/__init__.py`**, import the bridge **before** other modules:
+2. **In `dp_foundation/__init__.py`**, import the bridge **before** other modules:
 
    ```python
-   import core.config.args  # noqa: F401  # must be first
-   from core.config.settings import get_config
-   from core.logging.logger import get_logger
-   from core.spark.session import get_spark
+   import dp_foundation.config.args  # noqa: F401  # must be first
+   from dp_foundation.config.settings import get_config
+   from dp_foundation.logging.logger import get_logger
+   from dp_foundation.spark.session import get_spark
    ```
 
 3. **Add unit tests** to verify that `--ENV dev --CUSTOM_VAR value` pairs in `sys.argv` are correctly bridged.
@@ -430,8 +430,8 @@ Create a lightweight argument bridge in `core` that parses `sys.argv` for Glue-s
 | Field | Value |
 |---|---|
 | **Severity** | HIGH |
-| **Status** | open |
-| **Files** | `infrastructure/foundation/subnets.tf`, `src/core/config/settings.py` |
+| **Status** | done |
+| **Files** | `infrastructure/baseline/subnets.tf`, `dp_foundation/config/settings.py (in org-data-platform-foundation repo)` |
 
 #### Problem
 
@@ -439,7 +439,7 @@ The VPC has only two endpoints: S3 (Gateway) and Glue API (Interface). The priva
 
 `settings.py` calls `boto3.client("sts").get_caller_identity()` at module import time to resolve the AWS account ID for bucket naming. Without an STS VPC endpoint, this call will **timeout** (default ~60 seconds), and fall back to an empty string. This causes all dynamically built bucket names to be malformed (missing the account ID segment).
 
-Additionally, Glue workers need to send execution logs to CloudWatch Logs. While Glue manages some logging internally, the custom structured logging via `core.logging.logger` writes to `stderr` which Glue forwards to CloudWatch- but any explicit `boto3` CloudWatch Logs calls from the core library or future extensions would also fail.
+Additionally, Glue workers need to send execution logs to CloudWatch Logs. While Glue manages some logging internally, the custom structured logging via `dp_foundation.logging.logger` writes to `stderr` which Glue forwards to CloudWatch- but any explicit `boto3` CloudWatch Logs calls from the `dp_foundation` library or future extensions would also fail.
 
 #### Solution
 
@@ -491,8 +491,8 @@ Additionally, Glue workers need to send execution logs to CloudWatch Logs. While
 | Field | Value |
 |---|---|
 | **Severity** | HIGH |
-| **Status** | open |
-| **Files** | `setup/bootstrap.sh`, `src/core/config/settings.py`, `Makefile`, `pyproject.toml` |
+| **Status** | done |
+| **Files** | `setup/bootstrap.sh`, `dp_foundation/config/settings.py (in org-data-platform-foundation repo)`, `Makefile`, `pyproject.toml` |
 
 #### Problem
 
@@ -549,7 +549,7 @@ Without a loading mechanism, the generated `.env` has no effect, and environment
 | Field | Value |
 |---|---|
 | **Severity** | MEDIUM |
-| **Status** | open |
+| **Status** | done |
 | **Files** | `infrastructure/modules/stepfunction_pipeline/main.tf` |
 
 #### Problem
@@ -599,8 +599,8 @@ AWS [recommends](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-e
 | Field | Value |
 |---|---|
 | **Severity** | MEDIUM |
-| **Status** | open |
-| **Files** | `infrastructure/foundation/`, `infrastructure/modules/stepfunction_pipeline/main.tf` |
+| **Status** | done |
+| **Files** | `infrastructure/baseline/`, `infrastructure/modules/stepfunction_pipeline/main.tf` |
 
 #### Problem
 
@@ -610,7 +610,7 @@ For a Data Mesh domain handling data products with SLAs, this is a critical oper
 
 #### Solution
 
-1. **Create a foundation-level SNS topic** for pipeline alerts:
+1. **Create a baseline-level SNS topic** for pipeline alerts:
 
    ```hcl
    resource "aws_sns_topic" "pipeline_alerts" {
@@ -641,7 +641,7 @@ For a Data Mesh domain handling data products with SLAs, this is a critical oper
 
 3. **Add Glue job failure EventBridge rule** similarly for `"detail-type": ["Glue Job State Change"]` with `"state": ["FAILED", "TIMEOUT", "ERROR"]`.
 
-4. **Export the SNS topic ARN** from foundation outputs so projects can subscribe additional targets (email, Slack webhook via Lambda, PagerDuty).
+4. **Export the SNS topic ARN** from baseline outputs so projects can subscribe additional targets (email, Slack webhook via Lambda, PagerDuty).
 
 5. **Document** the alerting setup and how teams should subscribe to the topic.
 
@@ -652,12 +652,12 @@ For a Data Mesh domain handling data products with SLAs, this is a critical oper
 | Field | Value |
 |---|---|
 | **Severity** | LOW |
-| **Status** | open |
+| **Status** | done |
 | **Files** | `infrastructure/projects/_template/`, `src/jobs/` |
 
 #### Problem 1: `project.json` lacks governance metadata
 
-The current `project.json` template contains only `{"slug": "REPLACE_ME"}`. A production-ready Data Mesh contract should include governance metadata that enables data discovery, classification, and SLA enforcement.
+The current `project.json` template contains only `{"name": "REPLACE_ME"}`. A production-ready Data Mesh contract should include governance metadata that enables data discovery, classification, and SLA enforcement.
 
 #### Problem 2: No `src/jobs/_template/` directory
 
@@ -673,7 +673,7 @@ The `new-project` Makefile target only copies the Terraform template. It does no
 
    ```json
    {
-     "slug": "REPLACE_ME",
+     "name": "REPLACE_ME",
      "data_owner": "team-name",
      "data_classification": "internal",
      "pii": false,
@@ -699,19 +699,19 @@ The `new-project` Makefile target only copies the Terraform template. It does no
 | Field | Value |
 |---|---|
 | **Severity** | LOW |
-| **Status** | open |
+| **Status** | done |
 | **Files** | `infrastructure/projects/*/jobs.tf`, `.github/workflows/_deploy.yml` |
 
 #### Problem
 
-The `core-latest-py3-none-any.whl` alias upload was removed from `_deploy.yml` as part of the security hardening sprint (non-deterministic wheel version). Any Glue job Terraform definition that still references `core-latest-py3-none-any.whl` in its `--extra-py-files` argument will fail at runtime.
+The `data_platform_foundation-{version}-py3-none-any.whl` wheel alias upload was removed from `_deploy.yml` as part of the security hardening sprint (non-deterministic wheel version). Any Glue job Terraform definition that still references the old wheel filename in its `--extra-py-files` argument will fail at runtime.
 
 #### Solution
 
 1. Update all `jobs.tf` files to reference the versioned wheel pattern, e.g.:
 
    ```hcl
-   extra_py_files = "s3://${local.foundation.s3_artifacts_bucket}/core/core-${var.wheel_version}-py3-none-any.whl"
+   extra_py_files = "s3://${local.baseline.s3_artifacts_bucket}/wheels/data_platform_foundation-${var.wheel_version}-py3-none-any.whl"
    ```
 
 2. Pass `wheel_version` as a Terraform variable (set from `TF_VAR_wheel_version` in CI alongside the existing traceability vars).
@@ -720,9 +720,9 @@ The `core-latest-py3-none-any.whl` alias upload was removed from `_deploy.yml` a
 
 ---
 
-## Data Engineering / Core Library
+## Data Engineering / Foundation Library
 
-Tasks related to the shared `core` Python library, data quality, job patterns, and test coverage.
+Tasks related to the shared `dp_foundation` Python library, data quality, job patterns, and test coverage.
 
 ---
 
@@ -732,13 +732,13 @@ Tasks related to the shared `core` Python library, data quality, job patterns, a
 |---|---|
 | **Severity** | MEDIUM |
 | **Status** | open |
-| **Files** | `src/core/config/settings.py` |
+| **Files** | `dp_foundation/config/settings.py (in org-data-platform-foundation repo)` |
 
 #### Problem
 
 `_resolve_account_id()`, `_load_domain()`, and the subsequent construction of `_DEFAULTS` all execute as **module-level code** when `settings.py` is first imported. This means:
 
-1. **Every `import core.config.settings`** triggers an STS network call (or catches the timeout/exception). In a test suite with 20+ files, this adds significant latency.
+1. **Every `import dp_foundation.config.settings`** triggers an STS network call (or catches the timeout/exception). In a test suite with 20+ files, this adds significant latency.
 2. The values are computed once and **cannot be changed** without reloading the module, making tests brittle (`monkeypatch.setenv` after import has no effect on the cached `_ACCOUNT_ID`).
 3. An unreachable STS endpoint (e.g. inside a VPC without the endpoint, or offline) silently falls back to `""`, producing subtly wrong bucket names rather than an explicit error.
 
@@ -783,7 +783,7 @@ def _reset():
 |---|---|
 | **Severity** | MEDIUM |
 | **Status** | open |
-| **Files** | `src/core/io/writers.py` |
+| **Files** | `dp_foundation/io/writers.py (in org-data-platform-foundation repo)` |
 
 #### Problem
 
@@ -819,7 +819,7 @@ Document in the function docstring which approach is used and why.
 |---|---|
 | **Severity** | LOW |
 | **Status** | open |
-| **Files** | `src/core/quality/checks.py` |
+| **Files** | `dp_foundation/quality/checks.py (in org-data-platform-foundation repo)` |
 
 #### Problem
 
@@ -872,7 +872,7 @@ elif check_type == "schema_match":
 
 ---
 
-### P0-ENG-05- Test Coverage: No SparkSession Fixture or Core Module Tests
+### P0-ENG-05- Test Coverage: No SparkSession Fixture or Foundation Module Tests
 
 | Field | Value |
 |---|---|
@@ -882,7 +882,7 @@ elif check_type == "schema_match":
 
 #### Problem
 
-The test suite has no SparkSession fixture and only tests `config` and `logging`. The core modules that handle actual data - `readers.py`, `writers.py`, `quality/checks.py`, `iceberg/catalog.py` - have **zero unit tests**. The `conftest.py` file is empty.
+The test suite has no SparkSession fixture and only tests `config` and `logging`. The `dp_foundation` modules that handle actual data - `readers.py`, `writers.py`, `quality/checks.py`, `iceberg/catalog.py` - have **zero unit tests**. The `conftest.py` file is empty.
 
 The `test_jobs.py` file is excellent for structural validation (syntax, imports, main guard), but it does not test any job logic.
 
@@ -929,6 +929,13 @@ For a production template used by large organisations, the test scaffolding shou
 
 | ID | Title | Completed |  
 |---|---|---|
+| P0-06 | Glue job arguments bridged to environment variables (`dp_foundation.config.args`) | Phase 3 sprint |
+| P0-07 | VPC endpoints added for STS and CloudWatch Logs | Phase 3 sprint |
+| P0-08 | `.env` file loaded via `python-dotenv` + Makefile sourcing | Phase 3 sprint |
+| P0-09 | Step Functions pipeline: Retry, Catch, and terminal states added | Phase 3 sprint |
+| P0-10 | Observability: SNS topic + EventBridge rules for SFN/Glue failures | Phase 3 sprint |
+| P0-04 | Template completeness: `project.json` governance fields, `job_example.py`, `make new-project` scaffolds jobs dir | Phase 3 sprint |
+| P0-05 | Wheel reference updated to versioned `data_platform_foundation` pattern, `WHEEL_NAME` removed from Makefile | Phase 3 sprint |
 |- | EC2 CreateNetworkInterface scoped to subnet ARNs | Phase 2 sprint |
 |- | VPC Flow Logs IAM policy scoped to log group ARN | Phase 2 sprint |
 |- | KMS CMK explicit 3-statement key policy | Phase 2 sprint |
@@ -939,6 +946,6 @@ For a production template used by large organisations, the test scaffolding shou
 |- | CI: `security-scan` job added (pip-audit + bandit + checkov) | Phase 2 sprint |
 |- | CI/CD: `sed -i __init__.py` wrapped with `trap` for git restore | Phase 2 sprint |
 |- | CI/CD: AWS Account ID masked with `::add-mask::` | Phase 2 sprint |
-|- | CI/CD: `core-latest` wheel alias removed, versioned wheel only | Phase 2 sprint |
+|- | CI/CD: legacy wheel alias removed, versioned `data_platform_foundation` wheel only | Phase 2 sprint |
 |- | Terraform plan PR: truncation (`\| head -N`) removed | Phase 2 sprint |
 |- | Traceability tags: `git_sha`, `deployed_by`, `repository` on all resources | Phase 2 sprint |

@@ -1,8 +1,8 @@
-"""Unit tests for core.config module."""
+"""Unit tests for dp_foundation.config module."""
 
 import json
 
-from core.config.settings import _ABBR, _ENV_PREFIX, get_config
+from dp_foundation.config.settings import _ABBR, _ENV_PREFIX, get_config
 
 
 class TestGetConfig:

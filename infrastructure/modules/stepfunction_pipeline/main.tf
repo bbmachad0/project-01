@@ -31,6 +31,24 @@ variable "kms_key_arn" {
   default     = ""
 }
 
+variable "max_retry_attempts" {
+  description = "Maximum number of automatic retries per Glue job step on transient failure."
+  type        = number
+  default     = 2
+}
+
+variable "retry_interval_seconds" {
+  description = "Initial delay (seconds) before the first retry.  Subsequent retries use exponential backoff (2x)."
+  type        = number
+  default     = 60
+}
+
+variable "retry_backoff_rate" {
+  description = "Multiplier applied to the retry interval after each attempt."
+  type        = number
+  default     = 2.0
+}
+
 # ─── Dynamic ASL Definition ──────────────────────────────────────
 
 locals {
@@ -38,32 +56,34 @@ locals {
   sanitised_names = [for name in var.glue_job_names : replace(name, "-", "_")]
 
   # Build sequential states from job names.
-  # Each state is jsonencode'd individually and decoded back via jsondecode
-  # to preserve native types (bool for "End", string for "Next").
-  # Using merge() would coerce all values to string, producing "End": "true"
-  # instead of "End": true- which fails ASL schema validation.
-  states = { for i, name in var.glue_job_names :
-    "Run_${local.sanitised_names[i]}" => jsondecode(
-      i < length(var.glue_job_names) - 1
-      ? jsonencode({
-          Type     = "Task"
-          Resource = "arn:aws:states:::glue:startJobRun.sync"
-          Parameters = { JobName = name }
-          Next     = "Run_${local.sanitised_names[i + 1]}"
-        })
-      : jsonencode({
-          Type     = "Task"
-          Resource = "arn:aws:states:::glue:startJobRun.sync"
-          Parameters = { JobName = name }
-          End      = true
-        })
-    )
-  }
+  # Each state includes Retry with exponential backoff and a Catch
+  # block that routes failures to a terminal PipelineFailed state.
+  states = merge(
+    { for i, name in var.glue_job_names :
+      "Run_${local.sanitised_names[i]}" => jsondecode(jsonencode({
+        Type     = "Task"
+        Resource = "arn:aws:states:::glue:startJobRun.sync"
+        Parameters = { JobName = name }
+        Retry = [{
+          ErrorEquals     = ["States.ALL"]
+          IntervalSeconds = var.retry_interval_seconds
+          MaxAttempts     = var.max_retry_attempts
+          BackoffRate     = var.retry_backoff_rate
+        }]
+        Catch = [{
+          ErrorEquals = ["States.ALL"]
+          Next        = "PipelineFailed"
+        }]
+        Next = i < length(var.glue_job_names) - 1 ? "Run_${local.sanitised_names[i + 1]}" : "PipelineSucceeded"
+      }))
+    },
+    {
+      PipelineSucceeded = { Type = "Succeed" }
+      PipelineFailed    = { Type = "Fail", Error = "PipelineFailed", Cause = "One or more Glue jobs failed after retries." }
+    }
+  )
 
   # Build the full ASL definition as a JSON string.
-  # Each branch is encoded independently to avoid Terraform's
-  # "inconsistent conditional result types" error- the dynamic
-  # state keys in local.states differ from the static fallback object.
   definition_json = length(var.glue_job_names) > 0 ? jsonencode({
     Comment = "Auto-generated pipeline for ${var.pipeline_name}"
     StartAt = "Run_${local.sanitised_names[0]}"

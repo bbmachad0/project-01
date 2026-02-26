@@ -1,8 +1,8 @@
-"""Unit tests for core.logging module."""
+"""Unit tests for dp_foundation.logging module."""
 
 import logging
 
-from core.logging.logger import get_logger
+from dp_foundation.logging.logger import get_logger
 
 
 class TestGetLogger:

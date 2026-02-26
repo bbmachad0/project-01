@@ -1,9 +1,12 @@
-# ─── Foundation - Glue Catalog Databases ─────────────────────────
+# ─── Baseline - Glue Catalog Databases ───────────────────────────
 # Domain-scoped databases following a three-layer data-lake model:
 #
-#   {domain_abbr}_raw      - ingested data, as-is from sources
-#   {domain_abbr}_refined  - cleansed, conformed, business-typed
-#   {domain_abbr}_curated  - analytics-ready Iceberg tables
+#   {domain_abbr}_{country_code}_raw      - ingested data, as-is from sources
+#   {domain_abbr}_{country_code}_refined  - cleansed, conformed, business-typed
+#   {domain_abbr}_{country_code}_curated  - analytics-ready Iceberg tables
+#
+# The country_code (ISO 3166-1 alpha-2) distinguishes databases when
+# queried cross-region via Amazon Athena.
 #
 # The "default" database is NOT created here - it already exists in
 # every AWS account and is required by Iceberg for internal metadata.

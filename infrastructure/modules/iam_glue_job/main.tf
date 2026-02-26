@@ -2,10 +2,10 @@
 # Purpose-built IAM role for AWS Glue job execution in a Data Mesh
 # domain.  Scoped to project-level boundaries:
 #
-#   - S3 data access limited to {project_slug}/* prefix in each bucket
+#   - S3 data access limited to {project_name}/* prefix in each bucket
 #   - S3 artifacts access (read + temp write) for scripts and wheels
 #   - Glue Catalog limited to {domain_abbr}_* databases + "default"
-#   - SSM Parameter Store read under /{project_slug}/*
+#   - SSM Parameter Store read under /{project_name}/*
 #   - CloudWatch Logs for /aws-glue/* log groups
 #   - EC2 networking for VPC-connected jobs
 
@@ -16,7 +16,7 @@ variable "domain_abbr" {
   type        = string
 }
 
-variable "project_slug" {
+variable "project_name" {
   description = "Project slug - used for role naming and S3 prefix scoping."
   type        = string
 }
@@ -37,7 +37,7 @@ variable "region" {
 }
 
 variable "s3_bucket_arns" {
-  description = "S3 bucket ARNs for data layers (raw, refined, curated). Access scoped to project_slug prefix."
+  description = "S3 bucket ARNs for data layers (raw, refined, curated). Access scoped to project_name prefix."
   type        = list(string)
 }
 
@@ -87,7 +87,7 @@ data "aws_iam_policy_document" "glue_job" {
       "s3:PutObject",
       "s3:DeleteObject",
     ]
-    resources = [for arn in var.s3_bucket_arns : "${arn}/${var.project_slug}/*"]
+    resources = [for arn in var.s3_bucket_arns : "${arn}/${var.project_name}/*"]
   }
 
   statement {
@@ -101,7 +101,7 @@ data "aws_iam_policy_document" "glue_job" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.project_slug}/*", "${var.project_slug}"]
+      values   = ["${var.project_name}/*", "${var.project_name}"]
     }
   }
 
@@ -185,7 +185,7 @@ data "aws_iam_policy_document" "glue_job" {
       "ssm:GetParametersByPath",
     ]
     resources = [
-      "arn:aws:ssm:${var.region}:${var.account_id}:parameter/${var.project_slug}/*",
+      "arn:aws:ssm:${var.region}:${var.account_id}:parameter/${var.project_name}/*",
     ]
   }
 
@@ -295,13 +295,13 @@ data "aws_iam_policy_document" "glue_job" {
 # ─── Resources ───────────────────────────────────────────────────
 
 resource "aws_iam_role" "glue_job" {
-  name               = "${var.domain_abbr}-glue-${var.project_slug}-${var.env}"
+  name               = "${var.domain_abbr}-glue-${var.project_name}-${var.env}"
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
   tags               = var.tags
 }
 
 resource "aws_iam_role_policy" "glue_job" {
-  name   = "${var.domain_abbr}-glue-${var.project_slug}-policy"
+  name   = "${var.domain_abbr}-glue-${var.project_name}-policy"
   role   = aws_iam_role.glue_job.id
   policy = data.aws_iam_policy_document.glue_job.json
 }

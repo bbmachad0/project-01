@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "core"
-dynamic = ["version"]
-description = "Data Domain - shared core library for Glue Spark jobs."
+name = "domain-data-jobs"
+version = "1.0.0"
+description = "Data Domain - Glue job scripts and infrastructure for this Data Mesh domain."
 readme = "README.md"
 license = {text = "Proprietary"}
 requires-python = ">=3.11"
@@ -17,12 +17,13 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
     "Intended Audience :: Developers",
-    "Topic :: Software Development :: Libraries",
 ]
 
 dependencies = [
+    "data-platform-foundation @ git+https://github.com/ORG/org-data-platform-foundation.git@v1.0.0",
     "pyspark>=3.5,<3.6",
     "boto3>=1.35",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -34,16 +35,8 @@ dev = [
     "build>=1.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["core", "core.*"]
 # Jobs are NOT packaged - they remain standalone scripts uploaded to S3.
-
-[tool.setuptools.package-dir]
-"" = "src"
-
-[tool.setuptools.dynamic]
-version = {attr = "core.__version__"}
+# The foundation library (dp_foundation) is installed as a dependency.
 
 # ─── Ruff ────────────────────────────────────────────────────────
 [tool.ruff]
@@ -55,7 +48,7 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "RUF"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["core"]
+known-first-party = ["dp_foundation"]
 
 # ─── Pytest ──────────────────────────────────────────────────────
 [tool.pytest.ini_options]

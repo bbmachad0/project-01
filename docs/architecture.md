@@ -31,7 +31,7 @@ Every name, prefix, and convention derives from one file at `setup/domain.json`:
 | Field | Usage |
 |-------|-------|
 | `domain_name` | Human-readable name, Terraform descriptions |
-| `domain_abbr` | S3 buckets, Glue databases (`f01_raw`), job names |
+| `domain_abbr` | S3 buckets, Glue databases (`f01_de_raw`), job names |
 | `aws_region` | Provider region, `.env` generation |
 
 Edit this file **once** before running `setup/bootstrap.sh` to adapt the
@@ -42,18 +42,18 @@ repository for a different domain.
 ## Data Layers
 
 S3 bucket naming follows the AWS-recommended convention:
-`{domain_abbr}-{purpose}-{account_id}-{env}`
+`{domain_abbr}-{purpose}-{account_id}-{country_code}-{env}`
 
 The `account_id` is resolved dynamically from AWS credentials - it is
 never hardcoded.
 
 | Layer | S3 Bucket | Glue Database | Table Format |
 |-------|-----------|---------------|--------------|
-| **raw** | `{abbr}-raw-{account_id}-{env}` | `{abbr}_raw` | Standard (Hive) |
-| **refined** | `{abbr}-refined-{account_id}-{env}` | `{abbr}_refined` | Standard / Iceberg |
-| **curated** | `{abbr}-curated-{account_id}-{env}` | `{abbr}_curated` | Iceberg |
+| **raw** | `{abbr}-raw-{account_id}-{cc}-{env}` | `{abbr}_{cc}_raw` | Standard (Hive) |
+| **refined** | `{abbr}-refined-{account_id}-{cc}-{env}` | `{abbr}_{cc}_refined` | Standard / Iceberg |
+| **curated** | `{abbr}-curated-{account_id}-{cc}-{env}` | `{abbr}_{cc}_curated` | Iceberg |
 
-An `artifacts` bucket (`{abbr}-artifacts-{account_id}-{env}`) stores wheels
+An `artifacts` bucket (`{abbr}-artifacts-{account_id}-{cc}-{env}`) stores wheels
 and job scripts.
 
 ---
@@ -62,16 +62,16 @@ and job scripts.
 
 | Resource | Pattern | Example |
 |----------|---------|---------|
-| S3 bucket | `{abbr}-{purpose}-{account_id}-{env}` | `f01-raw-390403879405-dev` |
-| Glue database | `{abbr}_{layer}` | `f01_raw` |
-| Glue job | `{abbr}-{project_slug}-{job}-{env}` | `f01-pj01-daily-sales-dev` |
-| Pipeline | `{abbr}-{project_slug}-pipeline-{env}` | `f01-pj01-pipeline-dev` |
-| IAM role (Glue) | `{abbr}-glue-{project_slug}-{env}` | `f01-glue-pj01-dev` |
-| IAM role (Optimizer) | `{abbr}-optimizer-{project_slug}-{env}` | `f01-optimizer-pj01-dev` |
-| S3 data prefix | `{bucket}/{project_slug}/...` | `f01-raw-390403879405-dev/pj01/...` |
-| Iceberg table path | `s3://{bucket}/{project_slug}/{db}/{table}` | |
+| S3 bucket | `{abbr}-{purpose}-{account_id}-{country_code}-{env}` | `f01-raw-390403879405-de-dev` |
+| Glue database | `{abbr}_{country_code}_{layer}` | `f01_de_raw` |
+| Glue job | `{abbr}-{project_name}-{job}-{env}` | `f01-pj01-daily-sales-dev` |
+| Pipeline | `{abbr}-{project_name}-pipeline-{env}` | `f01-pj01-pipeline-dev` |
+| IAM role (Glue) | `{abbr}-glue-{project_name}-{env}` | `f01-glue-pj01-dev` |
+| IAM role (Optimizer) | `{abbr}-optimizer-{project_name}-{env}` | `f01-optimizer-pj01-dev` |
+| S3 data prefix | `{bucket}/{project_name}/...` | `f01-raw-390403879405-de-dev/pj01/...` |
+| Iceberg table path | `s3://{bucket}/{project_name}/{db}/{table}` | |
 
-Each project declares a **`project_slug`** (short, unique abbreviation) used
+Each project declares a **`project_name`** (short, unique abbreviation) used
 in all resource names to avoid collisions.
 
 ### Per-Project IAM Isolation
@@ -80,12 +80,12 @@ IAM roles are created **per project**, not per domain.  Each project's
 `iam.tf` instantiates a Glue execution role and a Table Optimizer role
 scoped to:
 
-- **S3**: object access restricted to `{bucket}/{project_slug}/*` on data
+- **S3**: object access restricted to `{bucket}/{project_name}/*` on data
   buckets (raw, refined, curated).  The artifacts bucket gets read-only
   access plus temp-dir write.
-- **Glue Catalog**: domain-wide (`{domain_abbr}_*` databases) because
+- **Glue Catalog**: domain-wide (`{domain_abbr}_{country_code}_*` databases) because
   databases are shared across projects within the domain.
-- **SSM**: parameters under `/{project_slug}/*`.
+- **SSM**: parameters under `/{project_name}/*`.
 
 This gives each project a "plug-and-play" role that is generic enough
 to avoid per-job policies, yet specific enough to prevent cross-project
@@ -93,13 +93,16 @@ data access.
 
 ---
 
-## Shared Python Library - `core`
+## Shared Python Library - `dp_foundation`
 
-The `src/core/` package is built as a wheel (`core-latest-py3-none-any.whl`)
-and uploaded to S3. Every Glue job references it via `--extra-py-files`.
+The `dp_foundation` package is maintained in the standalone repository
+[`org-data-platform-foundation`](https://github.com/ORG/org-data-platform-foundation).
+It is built as a wheel (`data_platform_foundation-{version}-py3-none-any.whl`),
+published as a GitHub Release asset, downloaded by this domain's CI/CD,
+uploaded to S3, and referenced via `--extra-py-files` on every Glue job.
 
 ```
-core/
+dp_foundation/
 ├── spark/      get_spark() - local vs Glue session factory
 ├── config/     get_config() - env-prefix-aware configuration
 ├── io/         read_*, write_*, merge_iceberg
@@ -107,11 +110,11 @@ core/
 └── logging/    get_logger() - JSON or text structured logging
 ```
 
-Jobs import from `core` - never from `awsglue` directly:
+Jobs import from `dp_foundation` - never from `awsglue` directly:
 
 ```python
-from core.spark.session import get_spark
-from core.io.writers import write_iceberg
+from dp_foundation.spark.session import get_spark
+from dp_foundation.io.writers import write_iceberg
 ```
 
 ---

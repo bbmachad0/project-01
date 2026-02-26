@@ -1,3 +1,8 @@
 {
-  "slug": "REPLACE_ME"
+  "name": "REPLACE_ME",
+  "data_owner": "team-name",
+  "data_classification": "internal",
+  "pii": false,
+  "sla_tier": "standard",
+  "team_email": "team@example.com"
 }

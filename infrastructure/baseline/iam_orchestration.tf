@@ -1,4 +1,4 @@
-# ─── Foundation - IAM: Orchestration (Step Functions) ────────────
+# ─── Baseline - IAM: Orchestration (Step Functions) ──────────────
 # Role assumed by AWS Step Functions state machines.
 # Scoped to start / monitor Glue jobs prefixed with {domain_abbr}-.
 

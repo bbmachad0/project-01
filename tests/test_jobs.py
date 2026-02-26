@@ -19,6 +19,7 @@ import pytest
 JOBS_ROOT = Path(__file__).resolve().parent.parent / "src" / "jobs"
 
 FORBIDDEN_IMPORTS = {"awsglue", "boto3", "botocore"}
+CORE_IMPORT_PREFIX = "dp_foundation"
 
 
 def _discover_jobs():
@@ -80,14 +81,14 @@ class TestJobScripts:
 
     @pytest.mark.parametrize("job_path", ALL_JOBS)
     def test_uses_core_imports(self, job_path):
-        """Job file should import at least one module from core.*."""
+        """Job file should import at least one module from dp_foundation.*."""
         tree = ast.parse(job_path.read_text(encoding="utf-8"))
         has_core = False
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("core"):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("dp_foundation"):
                 has_core = True
                 break
-        assert has_core, f"{job_path.name} should import from core.*"
+        assert has_core, f"{job_path.name} should import from dp_foundation.*"
 
     @pytest.mark.parametrize("job_path", ALL_JOBS)
     def test_has_docstring(self, job_path):

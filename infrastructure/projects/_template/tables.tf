@@ -6,7 +6,7 @@
 #   glue_catalog_table  -> Standard Hive/Parquet table (no optimizers)
 #
 # Iceberg: S3 path is auto-derived from table_name:
-#   s3://{bucket}/{project_slug}/{database}/{table_name}
+#   s3://{bucket}/{project_name}/{database}/{table_name}
 #
 # Example - Iceberg table in the Curated layer:
 #
@@ -14,10 +14,10 @@
 #     source = "../../modules/glue_iceberg_table"
 #
 #     table_name         = "daily_summary"
-#     database_name      = local.foundation.db_curated_name
+#     database_name      = local.baseline.db_curated_name
 #     catalog_id         = data.aws_caller_identity.current.account_id
-#     project_slug       = local.config.slug
-#     bucket             = local.foundation.s3_curated_bucket_id
+#     project_name       = local.config.name
+#     bucket             = local.baseline.s3_curated_bucket_id
 #     optimizer_role_arn = module.iam_table_optimizer.role_arn
 #     description        = "Aggregated daily summaries - Iceberg."
 #
@@ -34,9 +34,9 @@
 #     source = "../../modules/glue_catalog_table"
 #
 #     table_name    = "raw_events"
-#     database_name = local.foundation.db_raw_name
+#     database_name = local.baseline.db_raw_name
 #     catalog_id    = data.aws_caller_identity.current.account_id
-#     s3_location   = "s3://${local.foundation.s3_raw_bucket_id}/${local.config.slug}/raw_events/"
+#     s3_location   = "s3://${local.baseline.s3_raw_bucket_id}/${local.config.name}/raw_events/"
 #     description   = "Raw ingested events - Parquet, as-is from source."
 #
 #     columns = [

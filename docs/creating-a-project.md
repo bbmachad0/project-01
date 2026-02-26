@@ -13,7 +13,7 @@ tables, Glue jobs, optimizers, and pipelines. Each project lives in two places:
 ### 1. Use the make command (recommended)
 
 ```bash
-make new-project NAME=<my_project> SLUG=<short_id>
+make new-project NAME=<my_project> 
 ```
 
 This copies `_template/`, sets `project.json`, and prints next steps.
@@ -24,27 +24,27 @@ This copies `_template/`, sets `project.json`, and prints next steps.
 cp -r infrastructure/projects/_template infrastructure/projects/<my_project>
 ```
 
-### 2. Choose a `project_slug`
+### 2. Choose a `project_name`
 
-The slug is a short, unique abbreviation (e.g. `sales`, `cust`, `legacy`).
+The name is a short, unique abbreviation (e.g. `sales`, `cust`, `legacy`).
 It appears in every resource name:
 
 ```
-{domain_abbr}-{project_slug}-{job_name}-{env}
+{domain_abbr}-{project_name}-{job_name}-{env}
 ```
 
 ### 3. Fill in the Terraform files
 
 | File | Contents |
 |------|----------|
-| `project.json` | Set `slug` - the only required config |
+| `project.json` | Set `name` - the only required config |
 | `tables.tf` | Standard tables in RAW, Iceberg tables in refined/curated |
 | `jobs.tf` | One `module "job_*"` per Glue job |
 | `optimizers.tf` | One optimizer per Iceberg table |
 | `pipelines.tf` | StepFunctions pipeline wiring jobs together |
 | `outputs.tf` | Export job names, table ARNs, pipeline ARNs |
 
-> Use `local.foundation.*` to access shared resources (buckets, databases, etc.).
+> Use `local.baseline.*` to access shared resources (buckets, databases, etc.).
 > See `_template/README.md` for the full list of available locals.
 
 ### 4. Commit and push
@@ -111,7 +111,7 @@ details and caveats.
 ## Checklist
 
 - [ ] Template copied to `infrastructure/projects/<name>/`
-- [ ] `project_slug` chosen and added to the module block
+- [ ] `project_name` chosen and added to the module block
 - [ ] `tables.tf` defines all required tables
 - [ ] `jobs.tf` defines all Glue jobs
 - [ ] `optimizers.tf` has one optimizer per Iceberg table

@@ -3,7 +3,7 @@
 # Scoped to the project's S3 prefix and domain Glue Catalog databases.
 #
 # Permissions:
-#   - S3 read / write / delete scoped to {project_slug}/* prefix
+#   - S3 read / write / delete scoped to {project_name}/* prefix
 #   - Glue Catalog read / update (table metadata refresh)
 #   - CloudWatch Logs (optimizer execution logs)
 
@@ -14,7 +14,7 @@ variable "domain_abbr" {
   type        = string
 }
 
-variable "project_slug" {
+variable "project_name" {
   description = "Project slug - used for role naming and S3 prefix scoping."
   type        = string
 }
@@ -35,7 +35,7 @@ variable "region" {
 }
 
 variable "s3_bucket_arns" {
-  description = "S3 bucket ARNs containing Iceberg table data. Access scoped to project_slug prefix."
+  description = "S3 bucket ARNs containing Iceberg table data. Access scoped to project_name prefix."
   type        = list(string)
 }
 
@@ -74,7 +74,7 @@ data "aws_iam_policy_document" "table_optimizer" {
       "s3:PutObject",
       "s3:DeleteObject",
     ]
-    resources = [for arn in var.s3_bucket_arns : "${arn}/${var.project_slug}/*"]
+    resources = [for arn in var.s3_bucket_arns : "${arn}/${var.project_name}/*"]
   }
 
   statement {
@@ -88,7 +88,7 @@ data "aws_iam_policy_document" "table_optimizer" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.project_slug}/*", "${var.project_slug}"]
+      values   = ["${var.project_name}/*", "${var.project_name}"]
     }
   }
 
@@ -145,13 +145,13 @@ data "aws_iam_policy_document" "table_optimizer" {
 # ─── Resources ───────────────────────────────────────────────────
 
 resource "aws_iam_role" "table_optimizer" {
-  name               = "${var.domain_abbr}-optimizer-${var.project_slug}-${var.env}"
+  name               = "${var.domain_abbr}-optimizer-${var.project_name}-${var.env}"
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
   tags               = var.tags
 }
 
 resource "aws_iam_role_policy" "table_optimizer" {
-  name   = "${var.domain_abbr}-optimizer-${var.project_slug}-policy"
+  name   = "${var.domain_abbr}-optimizer-${var.project_name}-policy"
   role   = aws_iam_role.table_optimizer.id
   policy = data.aws_iam_policy_document.table_optimizer.json
 }
