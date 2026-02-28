@@ -21,7 +21,7 @@ classifiers = [
 
 dependencies = [
     "data-platform-foundation @ git+https://github.com/ORG/org-data-platform-foundation.git@v1.0.0",
-    "pyspark>=3.5,<3.6",
+    "pyspark>=3.5,<4.2",
     "boto3>=1.35",
     "python-dotenv>=1.0",
 ]
